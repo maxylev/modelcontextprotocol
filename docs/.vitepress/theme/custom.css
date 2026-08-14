@@ -1,0 +1,82 @@
+/*
+ * Site-specific theme on top of the VitePress default theme.
+ * Keep this file small and dependency-free; it only overrides CSS custom
+ * properties and a few structural rules. All overrides are paired in light
+ * and dark mode.
+ */
+
+:root {
+  --vp-c-brand-1: #4f46e5;
+  --vp-c-brand-2: #4338ca;
+  --vp-c-brand-3: #3730a3;
+  --vp-c-brand-soft: rgb(79 70 229 / 14%);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #4f46e5 0%, #7c3aed 100%);
+
+  --vp-custom-block-font-size: 14.5px;
+}
+
+.dark {
+  --vp-c-brand-1: #818cf8;
+  --vp-c-brand-2: #6366f1;
+  --vp-c-brand-3: #4f46e5;
+  --vp-c-brand-soft: rgb(129 140 248 / 16%);
+
+  --vp-home-hero-name-background: linear-gradient(120deg, #818cf8 0%, #c084fc 100%);
+}
+
+/* Hero tagline stays readable against the gradient name. */
+.VPHero .tagline {
+  max-width: 46rem;
+}
+
+/* Docs: keep tables compact but legible. */
+.VPDoc .vp-doc table {
+  display: table;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.VPDoc .vp-doc th,
+.VPDoc .vp-doc td {
+  padding: 0.5rem 0.75rem;
+}
+
+.VPDoc .vp-doc th {
+  white-space: nowrap;
+}
+
+/* Callouts: slightly tighter spacing for dense reference content. */
+.vp-doc .custom-block p {
+  margin: 0.5rem 0;
+}
+
+/* Inline code and terminal snippets. */
+.vp-doc code {
+  border-radius: 4px;
+}
+
+.vp-doc div[class*='language-'] {
+  border-radius: 8px;
+}
+
+/* Keep the footer from colliding with long sidebars. */
+.VPFooter {
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+/* Local search modal matches the accent. */
+:root .VPLocalSearchBox {
+  --vp-local-search-highlight-bg: rgb(79 70 229 / 18%);
+  --vp-local-search-highlight-text: var(--vp-c-brand-1);
+}
+
+/* Accessible focus: never rely on color alone. */
+.vp-doc a:focus-visible,
+.VPNav a:focus-visible,
+.VPSidebar a:focus-visible,
+.VPButton:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
+}

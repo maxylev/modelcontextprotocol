@@ -1,0 +1,11 @@
+/target
+*.swp
+*.swo
+.DS_Store
+memory.jsonl
+.env.test
+
+# VitePress docs site (docs/)
+docs/node_modules
+docs/.vitepress/cache
+docs/.vitepress/dist

@@ -1,0 +1,53 @@
+[package]
+name = "modelcontextprotocol"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+description = "Filesystem, Fetch, Memory, and Shell MCP servers in a single binary, implementing the Model Context Protocol 2026-07-28 specification."
+documentation = "https://docs.rs/modelcontextprotocol"
+license = "MIT"
+readme = "README.md"
+keywords = ["mcp", "model-context-protocol", "filesystem", "fetch", "memory", "agent"]
+categories = ["command-line-utilities", "web-programming"]
+exclude = [
+    "/.opencode",
+    "/docs/.vitepress/cache",
+    "/docs/.vitepress/dist",
+    "/docs/node_modules",
+    "/memory.jsonl",
+]
+
+[dependencies]
+rmcp = { version = "3.1", features = ["transport-io"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "io-util", "process", "time"] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+base64 = "0.23"
+url = "2"
+# rustls-no-provider uses the smaller `ring` TLS backend instead of aws-lc-rs.
+# The `ring` provider is installed explicitly at startup (see fetch/http.rs).
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "charset"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+robotstxt = "0.3"
+html2md = "0.2"
+globset = "0.4"
+similar = "3"
+mime_guess = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+rmcp = { version = "3.1", features = ["client", "transport-child-process"] }
+tempfile = "3"
+tiny_http = "0.12"
+
+# Minimize the release binary size: this is a CLI distributed through
+# `cargo install`, so size and startup time matter more than build time.
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true
