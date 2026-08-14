@@ -33,9 +33,12 @@ path `/modelcontextprotocol/`). `docs.yml` performs:
 7. Deploy the artifact with `actions/deploy-pages` in the protected
    `github-pages` environment.
 
-That is why the [Rust API docs](/rustdoc/modelcontextprotocol/index.html)
-link in this site's navigation works: the rustdoc is generated with the
-same toolchain the crate targets and shipped inside the site bundle.
+That is why the
+[Rust API docs](https://maxylev.github.io/modelcontextprotocol/rustdoc/)
+link works: the rustdoc is generated with the same toolchain the crate
+targets and shipped inside the site bundle. The workflow also creates a
+small redirect at `/rustdoc/` because a single-crate `cargo doc` build does
+not generate a root index page.
 
 ## Local simulation of the pipeline
 

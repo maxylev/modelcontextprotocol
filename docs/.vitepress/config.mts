@@ -4,11 +4,12 @@ const repo = 'https://github.com/maxylev/modelcontextprotocol'
 
 /**
  * The generated rustdoc is copied into the site output by
- * .github/workflows/docs.yml (see docs/ci-publishing.md). The link is
- * base-relative: the router and the markdown pipeline both prefix `/` links
- * with `base`, so the resolved URL is /modelcontextprotocol/rustdoc/... .
+ * .github/workflows/docs.yml (see docs/ci-publishing.md). An absolute URL
+ * forces a full page load instead of sending rustdoc through VitePress's
+ * client router.
  */
-const rustdoc = '/rustdoc/modelcontextprotocol/index.html'
+const rustdoc =
+  'https://maxylev.github.io/modelcontextprotocol/rustdoc/modelcontextprotocol/index.html'
 
 const nav = [
   { text: 'Getting Started', link: '/getting-started' },
@@ -85,12 +86,6 @@ export default defineConfig({
   base: '/modelcontextprotocol/',
   cleanUrls: true,
   lastUpdated: true,
-  /**
-   * The rustdoc output does not exist when the VitePress build runs; the
-   * publishing workflow copies target/doc/ into the built site afterwards
-   * (see docs/ci-publishing.md). The link is valid in the deployed site.
-   */
-  ignoreDeadLinks: [/^\/rustdoc\//],
   head: [
     ['meta', { name: 'theme-color', content: '#5b7cfa' }],
     [

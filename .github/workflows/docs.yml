@@ -64,6 +64,20 @@ jobs:
         run: |
           mkdir -p docs/.vitepress/dist/rustdoc
           cp -a target/doc/. docs/.vitepress/dist/rustdoc/
+          cat > docs/.vitepress/dist/rustdoc/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta http-equiv="refresh" content="0; url=./modelcontextprotocol/index.html">
+              <link rel="canonical" href="./modelcontextprotocol/index.html">
+              <title>modelcontextprotocol Rust API documentation</title>
+            </head>
+            <body>
+              <p><a href="./modelcontextprotocol/index.html">Open the Rust API documentation</a></p>
+            </body>
+          </html>
+          EOF
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
