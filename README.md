@@ -47,19 +47,19 @@ binary fits any MCP client. Subcommand form (recommended):
   "mcpServers": {
     "filesystem": {
       "command": "modelcontextprotocol",
-      "args": ["filesystem", "${HOME}/Developer"]
+      "args": ["filesystem", "~/Developer/my-project"]
+    },
+    "shell": {
+      "command": "modelcontextprotocol",
+      "args": ["shell", "~/Developer/my-project"]
     },
     "fetch": {
       "command": "modelcontextprotocol",
-      "args": ["fetch"]
+      "args": ["fetch", "--ignore-robots-txt", "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"]
     },
     "memory": {
       "command": "modelcontextprotocol",
       "args": ["memory"]
-    },
-    "shell": {
-      "command": "modelcontextprotocol",
-      "args": ["shell", "${HOME}/Developer/my-project"]
     }
   }
 }
@@ -68,6 +68,24 @@ binary fits any MCP client. Subcommand form (recommended):
 Flag form (`--filesystem <DIR>`, `--fetch`, `--memory`, `--shell <DIR>`)
 is equivalent. See the [CLI reference](https://maxylev.github.io/modelcontextprotocol/cli.html)
 for all options, conflict rules, and environment variables.
+
+### Adding to your MCP client
+
+A tutorial with the exact config file, format, and commands for each client
+is in the docs: [Adding the servers to your MCP client](https://maxylev.github.io/modelcontextprotocol/clients.html).
+
+Covered clients:
+
+| Client        | How to configure                                             |
+| ------------- | ------------------------------------------------------------ |
+| opencode v1/v2 | `mcp` key in `opencode.json` / `opencode.jsonc`, or `opencode mcp add` |
+| Claude Desktop | `mcpServers` in `claude_desktop_config.json`                 |
+| Claude Code   | `claude mcp add <name> -- modelcontextprotocol ...`, or `.mcp.json` |
+| Codex CLI     | `[mcp_servers.*]` in `~/.codex/config.toml`, or `codex mcp add` |
+| Pi agent      | `pi install npm:pi-mcp-adapter`, then `mcpServers` in `.mcp.json` / `~/.pi/agent/mcp.json` |
+| Gemini CLI    | `mcpServers` in `~/.gemini/settings.json`, or `gemini mcp add` |
+| Cursor        | `mcpServers` in `.cursor/mcp.json` / `~/.cursor/mcp.json`     |
+| Windsurf, Zed, VS Code, Continue, Cline, Roo | see the tutorial table |
 
 ### Validate
 

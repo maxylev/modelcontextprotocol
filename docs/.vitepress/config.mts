@@ -13,6 +13,7 @@ const rustdoc =
 
 const nav = [
   { text: 'Getting Started', link: '/getting-started' },
+  { text: 'MCP Clients', link: '/clients' },
   {
     text: 'Servers',
     items: [
@@ -45,6 +46,7 @@ const sidebar = [
     items: [
       { text: 'Overview', link: '/' },
       { text: 'Getting started', link: '/getting-started' },
+      { text: 'Adding to MCP clients', link: '/clients' },
       { text: 'Command line (CLI)', link: '/cli' },
     ],
   },

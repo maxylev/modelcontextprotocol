@@ -131,6 +131,8 @@ client, or exercise it interactively with the MCP Inspector — see
 
 ## Next steps
 
+- [Adding to MCP clients](/clients) — exact configs for opencode, Claude,
+  Codex, Pi, Gemini, Cursor, and more.
 - [Servers reference](/servers/filesystem) — every tool, parameter, and bound.
 - [Protocol](/protocol) — what the binary implements and what is verified.
 - [OpenRouter E2E](/openrouter-e2e) — the gated real-network acceptance suite.
