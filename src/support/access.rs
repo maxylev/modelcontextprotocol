@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 
@@ -40,7 +41,27 @@ pub fn expand_home(path: &Path) -> PathBuf {
 }
 
 fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
+    home_dir_from(|key| std::env::var_os(key))
+}
+
+/// Resolve the home directory from an environment lookup, trying the
+/// platform conventions in order: `HOME`, then `USERPROFILE`, then
+/// `HOMEDRIVE` + `HOMEPATH` (both present and non-empty). Standard library
+/// only, so it works on Unix and Windows CI runners alike.
+fn home_dir_from(mut get: impl FnMut(&str) -> Option<OsString>) -> Option<PathBuf> {
+    if let Some(home) = get("HOME").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(home));
+    }
+    if let Some(profile) = get("USERPROFILE").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(profile));
+    }
+    let (Some(drive), Some(path)) = (get("HOMEDRIVE"), get("HOMEPATH")) else {
+        return None;
+    };
+    if drive.is_empty() || path.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(drive).join(path))
 }
 
 /// True when `path` is lexically inside at least one of `roots`.
@@ -254,7 +275,8 @@ mod tests {
 
     #[test]
     fn expand_home_replaces_tilde() {
-        let home = home_dir().expect("HOME set in test env");
+        // Resolves via HOME on Unix, USERPROFILE on Windows runners.
+        let home = home_dir().expect("home dir resolvable in test env");
         assert_eq!(expand_home(Path::new("~")), home);
         assert_eq!(expand_home(Path::new("~/doc.txt")), home.join("doc.txt"));
         assert_eq!(expand_home(Path::new("/abs")), PathBuf::from("/abs"));
@@ -262,5 +284,53 @@ mod tests {
             expand_home(Path::new("rel/path")),
             PathBuf::from("rel/path")
         );
+    }
+
+    // The lookups below use an injected env closure instead of touching the
+    // process-global environment, so tests can run in parallel safely.
+    fn env_of<'a>(entries: &'a [(&'a str, &'a str)]) -> impl FnMut(&str) -> Option<OsString> + 'a {
+        let entries: Vec<(&'a str, &'a str)> = entries.to_vec();
+        move |key| {
+            entries
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| OsString::from(*v))
+        }
+    }
+
+    #[test]
+    fn home_dir_prefers_home() {
+        let get = env_of(&[("HOME", "/home/usr"), ("USERPROFILE", "C:\\Users\\bob")]);
+        assert_eq!(home_dir_from(get), Some(PathBuf::from("/home/usr")));
+    }
+
+    #[test]
+    fn home_dir_falls_back_to_userprofile() {
+        let get = env_of(&[("USERPROFILE", "C:\\Users\\bob")]);
+        assert_eq!(home_dir_from(get), Some(PathBuf::from("C:\\Users\\bob")));
+    }
+
+    #[test]
+    fn home_dir_joins_homedrive_and_homepath() {
+        let get = env_of(&[("HOMEDRIVE", "C:"), ("HOMEPATH", "\\Users\\bob")]);
+        // `\` is a separator on Windows but a plain character on Unix, so
+        // the joined result differs per platform.
+        #[cfg(windows)]
+        let expected = PathBuf::from("C:\\Users\\bob");
+        #[cfg(not(windows))]
+        let expected = PathBuf::from("C:/\\Users\\bob");
+        assert_eq!(home_dir_from(get), Some(expected));
+    }
+
+    #[test]
+    fn home_dir_requires_both_homedrive_and_homepath() {
+        let get = env_of(&[("HOMEDRIVE", "C:")]);
+        assert_eq!(home_dir_from(get), None);
+    }
+
+    #[test]
+    fn home_dir_skips_empty_values() {
+        let get = env_of(&[("HOME", ""), ("HOMEDRIVE", "C:"), ("HOMEPATH", "")]);
+        assert_eq!(home_dir_from(get), None);
     }
 }

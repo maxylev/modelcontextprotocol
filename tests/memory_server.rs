@@ -634,18 +634,28 @@ async fn resource_subscription_receives_update_notifications() {
             .await
             .expect("subscribe via subscriptions/listen");
 
-        // Mutation tools trigger notifications/resources/updated.
-        let result = call_tool(
-            &client,
-            "create_entities",
-            serde_json::json!({ "entities": [alice()] }),
-        )
-        .await;
-        assert_eq!(result.is_error, Some(false));
+        // Mutation tools trigger notifications/resources/updated. Poll the
+        // notification stream and run the mutation concurrently so the
+        // subscription is actively registered before the server emits; the
+        // mutation branch yields and waits briefly first so the notification
+        // future is guaranteed to be polled before create_entities runs.
+        let (notified, mutation) = tokio::time::timeout(Duration::from_secs(10), async {
+            tokio::join!(subscription.next(), async {
+                tokio::task::yield_now().await;
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                call_tool(
+                    &client,
+                    "create_entities",
+                    serde_json::json!({ "entities": [alice()] }),
+                )
+                .await
+            })
+        })
+        .await
+        .expect("notification within timeout");
+        assert_eq!(mutation.is_error, Some(false));
 
-        let notification = tokio::time::timeout(Duration::from_secs(10), subscription.next())
-            .await
-            .expect("notification within timeout")
+        let notification = notified
             .expect("next notification")
             .expect("notification stream alive");
         match notification {
