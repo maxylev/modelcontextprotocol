@@ -1,13 +1,13 @@
 [package]
 name = "modelcontextprotocol"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.97"
 description = "Filesystem, Fetch, Memory, and Shell MCP servers in a single binary, implementing the Model Context Protocol 2026-07-28 specification."
 documentation = "https://docs.rs/modelcontextprotocol"
 license = "MIT"
 readme = "README.md"
-keywords = ["mcp", "model-context-protocol", "filesystem", "fetch", "memory", "agent"]
+keywords = ["mcp", "filesystem", "fetch", "memory", "shell"]
 categories = ["command-line-utilities", "web-programming"]
 exclude = [
     "/.opencode",
