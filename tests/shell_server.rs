@@ -26,6 +26,13 @@ fn structured(result: &rmcp::model::CallToolResult) -> serde_json::Value {
         .expect("result has structured content")
 }
 
+fn reported_cwd(output: &str) -> PathBuf {
+    output
+        .lines()
+        .find_map(|line| std::fs::canonicalize(line.trim()).ok())
+        .expect("helper output contains an existing cwd")
+}
+
 /// Marker argument that switches the test binary into helper mode.
 const HELPER_MARKER: &str = "test_helper_command";
 
@@ -440,8 +447,9 @@ async fn omitted_cwd_defaults_to_first_allowed_directory() {
         let out = structured(&result);
         let cwd = out["stdout"].as_str().unwrap().to_string();
         let canonical = std::fs::canonicalize(dir.path()).unwrap();
-        assert!(
-            cwd.contains(canonical.to_str().unwrap()),
+        assert_eq!(
+            reported_cwd(&cwd),
+            canonical,
             "default cwd is the first allowed directory: {cwd}"
         );
     })
@@ -465,8 +473,9 @@ async fn valid_relative_cwd_resolves_against_first_allowed_directory() {
         let out = structured(&result);
         let cwd = out["stdout"].as_str().unwrap().to_string();
         let canonical = std::fs::canonicalize(join(dir.path(), "work")).unwrap();
-        assert!(
-            cwd.contains(canonical.to_str().unwrap()),
+        assert_eq!(
+            reported_cwd(&cwd),
+            canonical,
             "resolved against the allowed root: {cwd}"
         );
     })
