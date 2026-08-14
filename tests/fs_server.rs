@@ -888,7 +888,7 @@ async fn search_files_matches_globs_and_excludes() {
             serde_json::json!({ "path": "", "pattern": "*.rs" }),
         )
         .await;
-        let content = text(&result);
+        let content = text(&result).replace('\\', "/");
         assert!(content.contains("a.rs"), "got: {content}");
         assert!(
             !content.contains("src/b.rs"),
@@ -902,7 +902,7 @@ async fn search_files_matches_globs_and_excludes() {
             serde_json::json!({ "path": "", "pattern": "**/*.rs" }),
         )
         .await;
-        let content = text(&result);
+        let content = text(&result).replace('\\', "/");
         for needle in [
             "a.rs",
             "src/b.rs",
@@ -924,7 +924,7 @@ async fn search_files_matches_globs_and_excludes() {
             }),
         )
         .await;
-        let content = text(&result);
+        let content = text(&result).replace('\\', "/");
         assert!(!content.contains("src/sub"), "excluded: {content}");
         assert!(content.contains("src/b.rs"), "kept: {content}");
 
