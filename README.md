@@ -24,6 +24,24 @@ all 25 tools, coverage matrix, and CI/CD notes).
 
 ## Installation
 
+### One-line installer (macOS / Linux / Android)
+
+```bash
+curl -fsSL https://github.com/maxylev/modelcontextprotocol/releases/latest/download/install.sh | bash
+```
+
+The script detects your OS and CPU, downloads the matching prebuilt binary
+(MSRV build), verifies its SHA-256 checksum, and installs it to
+`~/.local/bin` (`$PREFIX/bin` under Termux). Override the directory with
+`INSTALL_DIR`:
+
+```bash
+curl -fsSL https://github.com/maxylev/modelcontextprotocol/releases/latest/download/install.sh | INSTALL_DIR=/usr/local/bin bash
+```
+
+Requires `curl`, `tar`, and `sha256sum` (Linux/Android) or `shasum` (macOS).
+The script itself is in the repository root (`install.sh`).
+
 ### Prebuilt binaries (no Rust required)
 
 Every `v*` tag publishes prebuilt binaries to

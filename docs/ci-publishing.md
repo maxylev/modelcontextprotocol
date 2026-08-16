@@ -28,7 +28,8 @@ runs:
    toolchains. Each job installs the toolchain (`RUSTUP_TOOLCHAIN` overrides
    the pinned `rust-toolchain.toml`), installs a cross toolchain where
    needed, builds with `--locked`, and uploads a `.tar.gz` (unix) or `.zip`
-   (windows) archive plus a `.sha256` file.
+   (windows) archive, a `.sha256` file, and the `install.sh` one-line
+   installer script.
 
 Target/configuration notes:
 

@@ -159,3 +159,4 @@ jobs:
           zip: windows
           checksum: sha256
           include: LICENSE
+          asset: install.sh
