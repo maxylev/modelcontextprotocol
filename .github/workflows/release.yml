@@ -120,10 +120,12 @@ jobs:
 
       - name: Link Windows binaries against the static CRT
         run: printf 'RUSTFLAGS=%s\n' "${RUSTFLAGS} -C target-feature=+crt-static" >>"${GITHUB_ENV}"
+        shell: bash
         if: contains(matrix.target, '-windows-msvc')
 
       - name: Build fully static Linux binaries
         run: printf 'RUSTFLAGS=%s\n' "${RUSTFLAGS} -C target-feature=+crt-static -C link-self-contained=yes" >>"${GITHUB_ENV}"
+        shell: bash
         if: contains(matrix.target, '-linux-musl')
 
       - name: Support older macOS versions
@@ -132,6 +134,7 @@ jobs:
             x86_64-apple-darwin) echo "MACOSX_DEPLOYMENT_TARGET=10.12" >>"${GITHUB_ENV}" ;;
             aarch64-apple-darwin) echo "MACOSX_DEPLOYMENT_TARGET=11.0" >>"${GITHUB_ENV}" ;;
           esac
+        shell: bash
 
       # Archive names embed a stable label (`-rust-msrv` / `-rust-stable`)
       # instead of the exact rustc version, so the
@@ -143,6 +146,7 @@ jobs:
             1.97.1) echo "RUSTC_LABEL=rust-msrv" >>"${GITHUB_ENV}" ;;
             *) echo "RUSTC_LABEL=rust-stable" >>"${GITHUB_ENV}" ;;
           esac
+        shell: bash
 
       - name: Build and upload binary to GitHub Releases
         uses: taiki-e/upload-rust-binary-action@v1
