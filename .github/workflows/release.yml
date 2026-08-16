@@ -48,9 +48,31 @@ jobs:
         # Build each target with the MSRV (1.97.1, pinned in rust-toolchain.toml)
         # and with latest stable, so users can pick the compatibility level.
         # RUSTUP_TOOLCHAIN (set below) overrides rust-toolchain.toml.
+        # `target` and `toolchain` are matrix dimensions (13 x 2 = 26 jobs);
+        # the `include` entries merge the runner OS into each target combo.
+        target:
+          # Linux (glibc and fully static musl builds)
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          # macOS
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          # iOS. Note: the binary is an unsigned Mach-O. iOS has no
+          # user-installable `bin` folder, so it cannot be run on a device
+          # as-is; this artifact is for signing/embedding into an app.
+          - aarch64-apple-ios
+          # Windows (static CRT, no VC++ runtime needed on the target)
+          - x86_64-pc-windows-msvc
+          - aarch64-pc-windows-msvc
+          # Android (NDK; usable e.g. under Termux)
+          - aarch64-linux-android
+          - x86_64-linux-android
+          - armv7-linux-androideabi
         toolchain: [1.97.1, stable]
         include:
-          # Linux (glibc and fully static musl builds)
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
           - target: aarch64-unknown-linux-gnu
@@ -61,22 +83,16 @@ jobs:
             os: ubuntu-22.04
           - target: armv7-unknown-linux-musleabihf
             os: ubuntu-22.04
-          # macOS
           - target: x86_64-apple-darwin
             os: macos-15
           - target: aarch64-apple-darwin
             os: macos-15
-          # iOS. Note: the binary is an unsigned Mach-O. iOS has no
-          # user-installable `bin` folder, so it cannot be run on a device
-          # as-is; this artifact is for signing/embedding into an app.
           - target: aarch64-apple-ios
             os: macos-15
-          # Windows (static CRT, no VC++ runtime needed on the target)
           - target: x86_64-pc-windows-msvc
             os: windows-2022
           - target: aarch64-pc-windows-msvc
             os: windows-2022
-          # Android (NDK; usable e.g. under Termux)
           - target: aarch64-linux-android
             os: ubuntu-22.04
           - target: x86_64-linux-android
@@ -124,8 +140,8 @@ jobs:
       - name: Record Rust build label for artifact names
         run: |
           case "${{ matrix.toolchain }}" in
-            1.97.1) echo "RUSTC_LABEL=msrv" >>"${GITHUB_ENV}" ;;
-            *) echo "RUSTC_LABEL=stable" >>"${GITHUB_ENV}" ;;
+            1.97.1) echo "RUSTC_LABEL=rust-msrv" >>"${GITHUB_ENV}" ;;
+            *) echo "RUSTC_LABEL=rust-stable" >>"${GITHUB_ENV}" ;;
           esac
 
       - name: Build and upload binary to GitHub Releases
@@ -133,7 +149,7 @@ jobs:
         with:
           bin: modelcontextprotocol
           target: ${{ matrix.target }}
-          archive: $bin-$target-rust${{ env.RUSTC_LABEL }}
+          archive: $bin-$target-${{ env.RUSTC_LABEL }}
           locked: true
           tar: unix
           zip: windows

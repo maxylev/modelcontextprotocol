@@ -68,7 +68,8 @@ The `-musl` Linux builds are fully static and run on any distribution; the
 Windows builds link the CRT statically (no VC++ runtime needed). Not sure
 about your architecture? Run `uname -m` (macOS/Linux) or
 `echo %PROCESSOR_ARCHITECTURE%` (Windows). Every archive ships with a
-`.sha256` checksum — append `.sha256` to any download URL to fetch it.
+`.sha256` checksum file named after the archive base — e.g.
+`modelcontextprotocol-aarch64-apple-darwin-rust-msrv.sha256`.
 
 #### Install on macOS
 
@@ -118,8 +119,8 @@ mv modelcontextprotocol "$PREFIX/bin/"
 
 ```bash
 # macOS / Linux
-curl -L -O https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-apple-darwin-rust-msrv.tar.gz.sha256
-shasum -a 256 -c modelcontextprotocol-aarch64-apple-darwin-rust-msrv.tar.gz.sha256
+curl -L -O https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-apple-darwin-rust-msrv.sha256
+shasum -a 256 -c modelcontextprotocol-aarch64-apple-darwin-rust-msrv.sha256
 
 # Windows PowerShell
 Get-FileHash modelcontextprotocol.zip -Algorithm SHA256
