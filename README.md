@@ -24,18 +24,112 @@ all 25 tools, coverage matrix, and CI/CD notes).
 
 ## Installation
 
+### Prebuilt binaries (no Rust required)
+
+Every `v*` tag publishes prebuilt binaries to
+[GitHub Releases](https://github.com/maxylev/modelcontextprotocol/releases).
+No Rust or Cargo needed: download your platform's archive below, extract it,
+and put the `modelcontextprotocol` executable in your `bin` folder (or
+anywhere on your `PATH`).
+
+Direct links to the **latest** version of each package (replace
+`rust-msrv` with `rust-stable` for the build made with the latest stable
+Rust):
+
+| Platform | Latest download |
+| --- | --- |
+| macOS — Apple Silicon | [modelcontextprotocol-aarch64-apple-darwin-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-apple-darwin-rust-msrv.tar.gz) |
+| macOS — Intel | [modelcontextprotocol-x86_64-apple-darwin-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-x86_64-apple-darwin-rust-msrv.tar.gz) |
+| Linux — x86_64 (glibc) | [modelcontextprotocol-x86_64-unknown-linux-gnu-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-x86_64-unknown-linux-gnu-rust-msrv.tar.gz) |
+| Linux — aarch64 (glibc) | [modelcontextprotocol-aarch64-unknown-linux-gnu-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-unknown-linux-gnu-rust-msrv.tar.gz) |
+| Linux — x86_64 (static musl) | [modelcontextprotocol-x86_64-unknown-linux-musl-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-x86_64-unknown-linux-musl-rust-msrv.tar.gz) |
+| Linux — aarch64 (static musl) | [modelcontextprotocol-aarch64-unknown-linux-musl-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-unknown-linux-musl-rust-msrv.tar.gz) |
+| Linux — armv7 (static musl) | [modelcontextprotocol-armv7-unknown-linux-musleabihf-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-armv7-unknown-linux-musleabihf-rust-msrv.tar.gz) |
+| Windows — x86_64 | [modelcontextprotocol-x86_64-pc-windows-msvc-rust-msrv.zip](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-x86_64-pc-windows-msvc-rust-msrv.zip) |
+| Windows — ARM64 | [modelcontextprotocol-aarch64-pc-windows-msvc-rust-msrv.zip](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-pc-windows-msvc-rust-msrv.zip) |
+| Android — aarch64 | [modelcontextprotocol-aarch64-linux-android-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-linux-android-rust-msrv.tar.gz) |
+| Android — x86_64 | [modelcontextprotocol-x86_64-linux-android-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-x86_64-linux-android-rust-msrv.tar.gz) |
+| Android — armv7 | [modelcontextprotocol-armv7-linux-androideabi-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-armv7-linux-androideabi-rust-msrv.tar.gz) |
+| iOS — aarch64 (unsigned; see note below) | [modelcontextprotocol-aarch64-apple-ios-rust-msrv.tar.gz](https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-apple-ios-rust-msrv.tar.gz) |
+
+The `-musl` Linux builds are fully static and run on any distribution; the
+Windows builds link the CRT statically (no VC++ runtime needed). Not sure
+about your architecture? Run `uname -m` (macOS/Linux) or `echo %PROCESSOR_ARCHITECTURE%` (Windows). Every archive ships with a `.sha256`
+checksum — append `.sha256` to any download URL to fetch it.
+
+#### Install on macOS
+
+```bash
+curl -L -O https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-apple-darwin-rust-msrv.tar.gz
+tar -xzf modelcontextprotocol-aarch64-apple-darwin-rust-msrv.tar.gz
+sudo install -m 755 modelcontextprotocol /usr/local/bin/
+```
+
+(On Intel Macs, use the `x86_64-apple-darwin` archive above.)
+
+#### Install on Linux
+
+```bash
+curl -L -O https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-x86_64-unknown-linux-musl-rust-msrv.tar.gz
+tar -xzf modelcontextprotocol-x86_64-unknown-linux-musl-rust-msrv.tar.gz
+sudo install -m 755 modelcontextprotocol /usr/local/bin/
+```
+
+(The static musl build works on every x86_64 distribution. On `aarch64`
+devices — Raspberry Pi 4/5, Apple Silicon VMs — use the
+`aarch64-unknown-linux-musl` archive, or `armv7-unknown-linux-musleabihf`
+on 32-bit ARM.)
+
+#### Install on Windows (PowerShell)
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-x86_64-pc-windows-msvc-rust-msrv.zip" -OutFile modelcontextprotocol.zip
+Expand-Archive modelcontextprotocol.zip -DestinationPath modelcontextprotocol
+New-Item -ItemType Directory -Force -Path "$HOME\bin" | Out-Null
+Move-Item modelcontextprotocol\modelcontextprotocol.exe "$HOME\bin\"
+```
+
+Then add `%USERPROFILE%\bin` to your `PATH` (System Properties → Environment
+Variables, or `setx PATH "%PATH%;%USERPROFILE%\bin"` and reopen the
+terminal).
+
+#### Install on Android (Termux)
+
+```bash
+curl -L -O https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-linux-android-rust-msrv.tar.gz
+tar -xzf modelcontextprotocol-aarch64-linux-android-rust-msrv.tar.gz
+mv modelcontextprotocol "$PREFIX/bin/"
+```
+
+#### Verify a download
+
+```bash
+# macOS / Linux
+curl -L -O https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-apple-darwin-rust-msrv.tar.gz.sha256
+shasum -a 256 -c modelcontextprotocol-aarch64-apple-darwin-rust-msrv.tar.gz.sha256
+
+# Windows PowerShell
+Get-FileHash modelcontextprotocol.zip -Algorithm SHA256
+```
+
+> **iOS note:** the iOS archive is an unsigned Mach-O binary. iOS has no
+> user-installable `bin` folder, so it cannot be run on a device as-is; it
+> is provided for signing and embedding into an app.
+
+### From source
+
 ```bash
 cargo install modelcontextprotocol
 ```
 
-Or install directly from source:
+Or install directly from the repository:
 
 ```bash
 cargo install --git https://github.com/maxylev/modelcontextprotocol
 ```
 
-The release binary is about 5 MB. Requirements: Rust 1.97+ (MSRV), Linux /
-macOS / Windows.
+The release binary is about 5 MB. Building from source requires Rust 1.97+
+(MSRV); the prebuilt binaries above run on Linux / macOS / Windows / Android.
 
 ## Quick start
 
