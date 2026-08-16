@@ -1,0 +1,3 @@
+# The installer script is executed directly from release assets, so it must
+# never be checked out with CRLF line endings on any runner.
+install.sh text eol=lf
