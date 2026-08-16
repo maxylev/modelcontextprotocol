@@ -74,17 +74,24 @@ printf 'Downloading %s\n' "${archive_url}"
 curl -fsSL -o "${tmp}/${base_name}.tar.gz" "${archive_url}"
 curl -fsSL -o "${tmp}/${base_name}.sha256" "${checksum_url}"
 
-(
-  cd "${tmp}"
+verify_sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum -c "${base_name}.sha256" >/dev/null
+    sha256sum "$1" | awk '{print $1}'
   elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 -c "${base_name}.sha256" >/dev/null
+    shasum -a 256 "$1" | awk '{print $1}'
   else
-    printf 'install.sh: warning: no sha256sum/shasum found; skipping checksum verification\n' >&2
+    return 1
   fi
-)
-printf 'Checksum verified\n'
+}
+
+if expected="$(verify_sha256 "${tmp}/${base_name}.tar.gz")"; then
+  # The .sha256 file also covers the install.sh asset; check the archive line only.
+  actual="$(grep -F "${base_name}.tar.gz" "${tmp}/${base_name}.sha256" | awk '{print $1}')"
+  [ "${expected}" = "${actual}" ] || die "checksum mismatch for ${base_name}.tar.gz"
+  printf 'Checksum verified\n'
+else
+  printf 'install.sh: warning: no sha256sum/shasum found; skipping checksum verification\n' >&2
+fi
 
 tar -xzf "${tmp}/${base_name}.tar.gz" -C "${tmp}"
 mkdir -p "${install_dir}"

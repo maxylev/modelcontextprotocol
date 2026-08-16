@@ -72,9 +72,10 @@ Rust):
 
 The `-musl` Linux builds are fully static and run on any distribution; the
 Windows builds link the CRT statically (no VC++ runtime needed). Not sure
-about your architecture? Run `uname -m` (macOS/Linux) or `echo %PROCESSOR_ARCHITECTURE%` (Windows). Every archive ships with a `.sha256`
+about your architecture? Run `uname -m` (macOS/Linux) or `echo %PROCESSOR_ARCHITECTURE%` (Windows). Every release ships a `.sha256`
 checksum file named after the archive base — e.g.
-`modelcontextprotocol-aarch64-apple-darwin-rust-msrv.sha256`.
+`modelcontextprotocol-aarch64-apple-darwin-rust-msrv.sha256` — covering the
+archive and the `install.sh` script.
 
 #### Install on macOS
 
@@ -123,8 +124,11 @@ mv modelcontextprotocol "$PREFIX/bin/"
 #### Verify a download
 
 ```bash
-# macOS / Linux
+# macOS / Linux — download the archive, its checksum, and the installer,
+# then verify all three against the release checksum file
+curl -L -O https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-apple-darwin-rust-msrv.tar.gz
 curl -L -O https://github.com/maxylev/modelcontextprotocol/releases/latest/download/modelcontextprotocol-aarch64-apple-darwin-rust-msrv.sha256
+curl -L -O https://github.com/maxylev/modelcontextprotocol/releases/latest/download/install.sh
 shasum -a 256 -c modelcontextprotocol-aarch64-apple-darwin-rust-msrv.sha256
 
 # Windows PowerShell
