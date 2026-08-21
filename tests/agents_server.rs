@@ -301,14 +301,19 @@ with open(log, "a", encoding="utf-8") as events:
     let definition = |name: &str, mode: &str| {
         let invocation = python_invocation();
         let (command, invocation_args) = invocation.split_first().expect("non-empty argv");
+        // Windows temp paths contain backslashes, which are TOML escapes in
+        // basic strings and would make the definition unparseable. Forward
+        // slashes are accepted by the Windows filesystem APIs.
+        let helper = helper.display().to_string().replace('\\', "/");
+        let log = log.display().to_string().replace('\\', "/");
         let mut args: Vec<String> = invocation_args
             .iter()
             .map(|arg| format!("\"{arg}\""))
             .collect();
         args.extend([
-            format!("\"{}\"", helper.display()),
+            format!("\"{helper}\""),
             format!("\"{mode}\""),
-            format!("\"{}\"", log.display()),
+            format!("\"{log}\""),
             "\"450\"".to_string(),
         ]);
         format!(
