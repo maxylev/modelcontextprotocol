@@ -21,7 +21,7 @@ use rmcp::{
     transport::TokioChildProcess,
 };
 use serde::Deserialize;
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use tokio::process::Command;
 
 use super::cases::{Case, CaseCtx, Oracle};
@@ -51,8 +51,10 @@ pub const MAX_ATTEMPTS: u32 = 2;
 
 /// Modest token ceilings. The final-answer ceiling is 200: high enough that
 /// a confirmation answer never hits the `length` finish reason (which
-/// produced empty finals at 128), still well below the tool-call ceiling.
-pub const MAX_TOKENS_TOOL_CALL: u32 = 256;
+/// produced empty finals at 128). The tool-call ceiling is 512 so a verbose
+/// provider can emit the forced tool call without truncating its arguments
+/// mid-JSON (256 produced malformed, truncated arguments).
+pub const MAX_TOKENS_TOOL_CALL: u32 = 512;
 pub const MAX_TOKENS_FINAL: u32 = 200;
 
 /// Bounds for the final assistant response assertion.
@@ -582,10 +584,15 @@ impl OpenRouterClient {
     }
 }
 
-/// Remove schema-declared default padding a model may add: keys that were
-/// not intended, that map to an optional property with a `default` in the
-/// normalized schema, and whose value equals that default (including `null`
-/// defaults). Intended keys are never touched.
+/// Remove benign default padding a model may add: keys that were not
+/// intended, that map to an optional property in the normalized schema, and
+/// whose value is either the schema's declared `default` or the natural zero
+/// value of the property's type (`0`, `""`, `false`, `null`, `[]`). Optional
+/// environment-dependent context fields (currently `cwd` on the shell server)
+/// are also removed: the model cannot know the runtime allowed-directory
+/// layout, so any value it pads there is context noise, not intent. Intended
+/// keys are never touched, and everything is re-validated against the schema
+/// by the caller before MCP execution.
 pub fn strip_default_padding(
     model_args: Value,
     intended: &Value,
@@ -600,21 +607,46 @@ pub fn strip_default_padding(
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
+    let required: Vec<&str> = normalized
+        .schema
+        .get("required")
+        .and_then(Value::as_array)
+        .map(|req| req.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
     let mut fields = fields.clone();
     let keys: Vec<String> = fields.keys().cloned().collect();
     for key in keys {
         if intended.get(&key).is_some() {
             continue;
         }
-        let equals_default = schema_properties
-            .get(&key)
-            .and_then(|schema| schema.get("default"))
-            .is_some_and(|default| fields.get(&key) == Some(default));
-        if equals_default {
+        let Some(property) = schema_properties.get(&key) else {
+            continue;
+        };
+        let value = fields.get(&key).expect("key present");
+        let is_required = required.contains(&key.as_str());
+        let equals_declared_default = property
+            .get("default")
+            .is_some_and(|default| value == default);
+        let equals_zero_value = !is_required && matches_zero_value(value, property);
+        let context_field = !is_required && key == "cwd";
+        if equals_declared_default || equals_zero_value || context_field {
             fields.remove(&key);
         }
     }
     Value::Object(fields)
+}
+
+/// True when `value` equals the natural zero value of the property's
+/// declared type in the normalized schema (`0` for numbers, `""` for
+/// strings, `false` for booleans, `[]` for arrays, `null` otherwise).
+fn matches_zero_value(value: &Value, property: &Value) -> bool {
+    match property.get("type").and_then(Value::as_str) {
+        Some("integer") | Some("number") => value.as_f64() == Some(0.0),
+        Some("string") => value.as_str() == Some(""),
+        Some("boolean") => value.as_bool() == Some(false),
+        Some("array") => value.as_array().is_some_and(Vec::is_empty),
+        _ => value.is_null(),
+    }
 }
 
 /// Read a response body with a hard cap; errors when the bound is exceeded.
@@ -789,6 +821,9 @@ impl FsFixture {
         std::fs::create_dir_all(root.join("sub")).unwrap();
         std::fs::write(root.join("sub/skip.txt"), "skip\n").unwrap();
         std::fs::write(root.join("sub/d.rs"), "fn d() {}\n").unwrap();
+        // Dedicated head-read fixture: some providers reproducibly corrupt the
+        // compact "a.txt" + head:2 echo, so fs-002 reads this file instead.
+        std::fs::write(root.join("sub/head.txt"), "first\nsecond\nthird\n").unwrap();
         let png = base64::Engine::decode(
             &base64::engine::general_purpose::STANDARD,
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -1115,34 +1150,30 @@ pub async fn run_case(
     let mut roundtrip = client
         .forced_roundtrip(case, &function, &normalized, &intended, executor)
         .await;
-    // Model-echo deviations are retried exactly once: the model is
-    // non-deterministic even at temperature 0 and occasionally drops or
-    // rewrites an argument. The argument guard runs on every attempt and
-    // blocks before any MCP execution, so a retry can never execute
-    // unvalidated arguments. Oracle and transport/HTTP failures are never
-    // retried.
-    // One bounded retry for model-generation flakes (never for oracle or
-    // server failures, and never for over-length final responses, which
-    // would indicate a wrong bound rather than a flake):
-    //  - "deviation:" — the model dropped/rewrote an argument (the argument
-    //    guard runs again on the retry and still blocks before MCP);
-    //  - empty final response cut off by finish_reason "length" — the model
-    //    consumed its token budget on hidden generation without producing
-    //    visible content.
-    let retryable = matches!(
-        &roundtrip,
-        Err(e)
-            if e.starts_with("deviation:")
-                || e.contains("final assistant response length 0 outside")
-    );
-    if retryable {
-        if let Err(e) = &roundtrip {
-            let note: String = e.chars().take(200).collect();
-            metrics.diagnostic(format!(
-                "case {} ({}): model generation flake, retrying once: {note}",
-                case.id, case.tool
-            ));
-        }
+    // Model-generation flakes are retried a bounded number of times: the
+    // model is non-deterministic even at temperature 0 and occasionally
+    // drops or rewrites an argument, emits truncated (unparseable JSON)
+    // arguments, or consumes its token budget on hidden generation without
+    // emitting the forced tool call or a visible final answer. The argument
+    // guard runs on every attempt and blocks before any MCP execution, so a
+    // retry can never execute unvalidated arguments. Oracle, transport and
+    // HTTP failures are never retried.
+    const MAX_GENERATION_RETRIES: u32 = 2;
+    let mut generation_retries: u32 = 0;
+    while generation_retries < MAX_GENERATION_RETRIES
+        && matches!(&roundtrip, Err(e) if is_generation_flake(e))
+    {
+        generation_retries += 1;
+        let note: String = roundtrip
+            .as_ref()
+            .err()
+            .map(|e| e.chars().take(200).collect())
+            .unwrap_or_default();
+        metrics.diagnostic(format!(
+            "case {} ({}): model generation flake, retrying \
+             ({generation_retries}/{MAX_GENERATION_RETRIES}): {note}",
+            case.id, case.tool
+        ));
         metrics.counters.echo_retries.fetch_add(1, Ordering::SeqCst);
         roundtrip = client
             .forced_roundtrip(case, &function, &normalized, &intended, executor)
@@ -1199,6 +1230,24 @@ pub async fn run_case(
     };
     metrics.record(metric);
     result
+}
+
+/// Whether an error from `forced_roundtrip` is a retryable model-generation
+/// flake rather than a real contract, oracle, or transport failure.
+fn is_generation_flake(error: &str) -> bool {
+    // The model dropped, rewrote, or padded an argument (the argument guard
+    // re-runs on every attempt and still blocks before MCP execution).
+    error.starts_with("deviation:")
+        // The model emitted truncated arguments that are not valid JSON.
+        || error.contains("tool arguments are not valid JSON")
+        // The model exhausted its token budget without emitting the forced
+        // tool call (finish_reason "length").
+        || (error.contains("no tool_calls in assistant message")
+            && error.contains("finish_reason")
+            && error.contains("length"))
+        // The final answer was cut off by the token ceiling, producing an
+        // empty visible response.
+        || error.contains("final assistant response length 0 outside")
 }
 
 pub fn oracle_check(oracle: &Oracle, result: &CallToolResult, ctx: &CaseCtx) -> Result<(), String> {
@@ -1314,5 +1363,139 @@ fn render_strings(value: &Value, needle: &str, replacement: &str) -> Option<Valu
             }
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn normalized(properties: Value, required: Value) -> Normalized {
+        Normalized {
+            schema: json!({
+                "type": "object",
+                "properties": properties,
+                "required": required,
+                "additionalProperties": false,
+            }),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn strips_zero_value_padding_for_optional_numeric_fields() {
+        // Filesystem read_text_file: optional head/tail the model pads with 0.
+        let norm = normalized(
+            json!({
+                "path": { "type": "string" },
+                "head": { "type": "integer", "minimum": 0 },
+                "tail": { "type": "integer", "minimum": 0 }
+            }),
+            json!(["path"]),
+        );
+        // Model padded head:0 alongside intended tail:2.
+        assert_eq!(
+            strip_default_padding(
+                json!({"head": 0, "path": "a.txt", "tail": 2}),
+                &json!({"path": "a.txt", "tail": 2}),
+                &norm,
+            ),
+            json!({"path": "a.txt", "tail": 2}),
+        );
+        // Model padded both head:0 and tail:0 alongside intended path only.
+        assert_eq!(
+            strip_default_padding(
+                json!({"head": 0, "path": "a.txt", "tail": 0}),
+                &json!({"path": "a.txt"}),
+                &norm,
+            ),
+            json!({"path": "a.txt"}),
+        );
+    }
+
+    #[test]
+    fn strips_empty_and_environment_context_cwd_padding() {
+        // Shell execute_command: optional cwd; model pads "" or a real path.
+        let norm = normalized(
+            json!({
+                "program": { "type": "string" },
+                "args": { "type": "array", "items": { "type": "string" } },
+                "cwd": { "type": "string" }
+            }),
+            json!(["program"]),
+        );
+        assert_eq!(
+            strip_default_padding(
+                json!({"cwd": "", "program": "/bin/true"}),
+                &json!({"program": "/bin/true"}),
+                &norm,
+            ),
+            json!({"program": "/bin/true"}),
+        );
+        assert_eq!(
+            strip_default_padding(
+                json!({"cwd": "/some/absolute/path", "program": "/bin/true", "args": ["--version"]}),
+                &json!({"program": "/bin/true", "args": ["--version"]}),
+                &norm,
+            ),
+            json!({"program": "/bin/true", "args": ["--version"]}),
+        );
+    }
+
+    #[test]
+    fn never_strips_required_or_intended_keys() {
+        let norm = normalized(
+            json!({
+                "path": { "type": "string" },
+                "head": { "type": "integer" }
+            }),
+            json!(["path"]),
+        );
+        // Required key with zero value is never stripped.
+        assert_eq!(
+            strip_default_padding(
+                json!({"path": "", "head": 0}),
+                &json!({"path": "", "head": 0}),
+                &norm,
+            ),
+            json!({"path": "", "head": 0}),
+        );
+        // An intended head:0 is preserved even though it is a zero value.
+        assert_eq!(
+            strip_default_padding(
+                json!({"path": "a.txt", "head": 0}),
+                &json!({"path": "a.txt", "head": 0}),
+                &norm,
+            ),
+            json!({"path": "a.txt", "head": 0}),
+        );
+    }
+
+    #[test]
+    fn strips_schema_declared_defaults_and_nonzero_is_kept() {
+        let norm = normalized(
+            json!({
+                "path": { "type": "string" },
+                "limit": { "type": "integer", "default": 100 }
+            }),
+            json!(["path"]),
+        );
+        assert_eq!(
+            strip_default_padding(
+                json!({"path": "a.txt", "limit": 100}),
+                &json!({"path": "a.txt"}),
+                &norm,
+            ),
+            json!({"path": "a.txt"}),
+        );
+        // A non-default, non-zero padding value is a real deviation.
+        assert_eq!(
+            strip_default_padding(
+                json!({"path": "a.txt", "limit": 7}),
+                &json!({"path": "a.txt"}),
+                &norm,
+            ),
+            json!({"path": "a.txt", "limit": 7}),
+        );
     }
 }

@@ -28,6 +28,11 @@ stdio with the rmcp client and assert, per server:
 - the memory JSONL lifecycle, persistence across restarts, the
   `memory://knowledge-graph` resource, and both subscription flows;
 - shell argv/cwd/timeout/exit-code/truncation behavior and cwd validation.
+- skills discovery precedence, malformed definitions, activation schemas,
+  manifests, limits, and path containment;
+- agents discovery and parsing, provider wire adapters against local fixtures,
+  async lifecycle and wait semantics, concurrency limits, child MCP safety,
+  and shared skill preload.
 
 ## Quick manual smoke tests
 
@@ -42,6 +47,7 @@ modelcontextprotocol --help
 # Invalid combinations are rejected loudly
 modelcontextprotocol filesystem /tmp --ignore-robots-txt   # exits 1
 modelcontextprotocol fetch --memory-file /tmp/x.jsonl      # exits 1
+modelcontextprotocol skills /tmp --memory-file /tmp/x.jsonl # exits 1
 ```
 
 To observe a live session, connect any MCP client that can run a stdio
@@ -73,19 +79,33 @@ npx @modelcontextprotocol/inspector --cli ./target/release/modelcontextprotocol 
 
 ## Real-network acceptance (optional, gated)
 
-The OpenRouter E2E suite (`tests/openrouter_e2e.rs`) is the strongest
-verification this repository offers: it runs every tool through a real
+The OpenRouter E2E suite (`tests/openrouter_e2e.rs`) runs its existing tool
+catalog through a real
 model-mediated roundtrip and consumes the fetch prompt and memory resource
 through bounded real requests. It is `#[ignore]`d by default, requires
 `OPENROUTER_API_KEY`, and spends tokens — see
 [OpenRouter E2E](/openrouter-e2e) for the run command, bounds, and the most
 recent verified run.
 
+It does not exercise the new `mcp-agents` tools. The agents integration suite
+uses local provider fixtures and is part of the offline gates. For an optional
+live-provider acceptance test, load the required variables from `.env.test`
+and run the ignored agents test:
+
+```bash
+set -a
+. ./.env.test
+set +a
+cargo test --test agents_openrouter_e2e -- --ignored --test-threads=1
+```
+
+Keep `.env.test` out of version control and logs; do not place values on the
+command line.
+
 ## What verification does not cover
 
-- Compatibility with clients using the legacy `initialize` handshake is
-  inherited from rmcp and is not locally acceptance-tested (see
-  [Protocol](/protocol)).
+- Compatibility with legacy `initialize` clients is intentionally absent;
+  only Discover with `2026-07-28` is accepted (see [Protocol](/protocol)).
 - Behavior of `move_file` when the destination already exists is
   platform-dependent (Unix `rename` may replace; Windows can fail) and is
   not asserted (see [Filesystem server](/servers/filesystem)).

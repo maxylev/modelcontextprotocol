@@ -543,6 +543,53 @@ async fn write_file_creates_and_overwrites() {
     .await;
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn atomic_rewrites_preserve_existing_file_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tmpdir();
+    let client = connect(&[dir.path()]).await;
+    run_test(async move {
+        // write_file over an existing 0600 file keeps it 0600.
+        let private = join(dir.path(), "private.txt");
+        std::fs::write(&private, "old content").unwrap();
+        std::fs::set_permissions(&private, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let result = call_tool(
+            &client,
+            "write_file",
+            serde_json::json!({ "path": "private.txt", "content": "new content" }),
+        )
+        .await;
+        assert_eq!(result.is_error, Some(false));
+        assert_eq!(std::fs::read_to_string(&private).unwrap(), "new content");
+        let mode = std::fs::metadata(&private).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "write_file preserved 0600, got {mode:#o}");
+
+        // edit_file over an existing 0755 file keeps it 0755.
+        let executable = join(dir.path(), "executable.txt");
+        std::fs::write(&executable, "alpha beta\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let result = call_tool(
+            &client,
+            "edit_file",
+            serde_json::json!({
+                "path": "executable.txt",
+                "edits": [{"oldText": "beta", "newText": "BETA"}]
+            }),
+        )
+        .await;
+        assert_eq!(result.is_error, Some(false));
+        assert_eq!(
+            std::fs::read_to_string(&executable).unwrap(),
+            "alpha BETA\n"
+        );
+        let mode = std::fs::metadata(&executable).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o755, "edit_file preserved 0755, got {mode:#o}");
+    })
+    .await;
+}
+
 #[tokio::test]
 async fn create_directory_nested_and_idempotent() {
     let dir = tmpdir();

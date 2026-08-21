@@ -175,6 +175,22 @@ impl FetchServer {
 #[tool_handler(router = self.tool_router)]
 #[prompt_handler(router = self.prompt_router)]
 impl ServerHandler for FetchServer {
+    fn initialize(
+        &self,
+        _request: rmcp::model::InitializeRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> impl std::future::Future<Output = Result<rmcp::model::InitializeResult, McpError>>
+    + rmcp::service::MaybeSendFuture
+    + '_ {
+        crate::support::reject_legacy_initialize()
+    }
+
+    fn supported_protocol_versions(
+        &self,
+    ) -> std::borrow::Cow<'static, [rmcp::model::ProtocolVersion]> {
+        std::borrow::Cow::Borrowed(crate::support::SUPPORTED_PROTOCOL_VERSIONS)
+    }
+
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(
             ServerCapabilities::builder()

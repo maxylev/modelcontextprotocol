@@ -8,16 +8,16 @@ SDK, [`rmcp`](https://crates.io/crates/rmcp) 3.1, over a stdio transport.
 ## Stateless 2026-07-28 flow
 
 The 2026-07-28 protocol is stateless: the legacy `initialize` handshake is
-not required, and clients can instead use the optional `server/discover`
-RPC to learn the server's identity and capabilities in one round trip.
+not used. Clients use `server/discover` to learn the server's identity and
+capabilities in one round trip.
 The rmcp client used by the test suites connects with
 `ClientLifecycleMode::Discover` and negotiates `V_2026_07_28`; the
 acceptance suite verifies the negotiated version on every connection.
 
-**Compatibility with older `initialize`-based clients:** version
-negotiation for the legacy flow is inherited from rmcp and is not
-acceptance-tested in this repository. Treat it as inherited library
-behavior, not a locally verified guarantee.
+All six handlers narrow rmcp's default version set to only `2026-07-28` and
+reject the legacy `initialize` lifecycle. There is no fallback to a `2025-*`
+revision. Child MCP clients created by `mcp-agents` apply the same exact
+Discover policy.
 
 ## Stdio cleanliness
 
@@ -30,7 +30,8 @@ behavior, not a locally verified guarantee.
 ## List cache hints
 
 `tools/list` responses carry the 2026-07-28 cache hints:
-`ttlMs: 0` and `cacheScope: "public"`. This is asserted in all four server
+`ttlMs: 0`; filesystem, fetch, memory, and shell use `cacheScope: "public"`,
+while skills and agents use `cacheScope: "private"`. This is asserted in the
 integration suites (`tests/*_server.rs`).
 
 Cache hints on `prompts/list` and `resources/list` are **not** documented
@@ -38,12 +39,14 @@ here: they are not asserted by any test, so no claim is made about them.
 
 ## Server identities and capabilities
 
-| Server     | Implementation name | Version               | Capabilities                             |
-| ---------- | ------------------- | --------------------- | ---------------------------------------- |
-| filesystem | `mcp-filesystem`    | crate version (0.1.0) | tools                                    |
-| fetch      | `mcp-fetch`         | crate version (0.1.0) | tools, prompts                           |
-| memory     | `mcp-memory`        | crate version (0.1.0) | tools, resources, resource subscriptions |
-| shell      | `mcp-shell`         | crate version (0.1.0) | tools                                    |
+| Server     | Implementation name | Version             | Capabilities                             |
+| ---------- | ------------------- | ------------------- | ---------------------------------------- |
+| filesystem | `mcp-filesystem`    | `CARGO_PKG_VERSION` | tools                                    |
+| fetch      | `mcp-fetch`         | `CARGO_PKG_VERSION` | tools, prompts                           |
+| memory     | `mcp-memory`        | `CARGO_PKG_VERSION` | tools, resources, resource subscriptions |
+| shell      | `mcp-shell`         | `CARGO_PKG_VERSION` | tools                                    |
+| skills     | `mcp-skills`        | `CARGO_PKG_VERSION` | tools when skills are available          |
+| agents     | `mcp-agents`        | `CARGO_PKG_VERSION` | tools when agents are available          |
 
 Each server also publishes `instructions` text through discovery, describing
 how clients should use it (for example, filesystem instructs clients to use
@@ -51,13 +54,15 @@ how clients should use it (for example, filesystem instructs clients to use
 
 ## Tools and prompts
 
-- **25 tools total:** 14 filesystem + 1 fetch + 9 memory + 1 shell. Every
-  tool, parameter, default, and bound is documented on the per-server pages:
-  [Filesystem](/servers/filesystem), [Fetch](/servers/fetch),
-  [Memory](/servers/memory), [Shell](/servers/shell).
+- **29 tools total:** 14 filesystem + 1 fetch + 9 memory + 1 shell + 1 skills
+  and 3 agents. Every tool, parameter, default, and bound is documented on the
+  per-server pages: [Filesystem](/servers/filesystem), [Fetch](/servers/fetch),
+  [Memory](/servers/memory), [Shell](/servers/shell), [Skills](/servers/skills),
+  and [Agents](/servers/agents).
 - **1 prompt:** `fetch` on the fetch server (takes `url`).
-- Tool schemas are generated at compile time with `schemars` and exposed
-  through rmcp; there are no handwritten schema duplicates.
+- Static tool schemas are generated with `schemars`. Skills and agents build
+  their small input schemas at startup so discovered names can be exact enum
+  values; output schemas still use `schemars`.
 
 ### Tool annotations
 

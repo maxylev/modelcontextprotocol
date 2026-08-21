@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::support::atomic_write;
+
 /// An entity (node) in the knowledge graph.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -127,7 +129,11 @@ impl KnowledgeGraphManager {
                     .map_err(|e| format!("Failed to serialize relation: {e}"))?,
             );
         }
-        tokio::fs::write(&self.path, lines.join("\n"))
+        let contents = lines.join("\n");
+        // Atomic replacement: the only valid persistence copy is never
+        // truncated before the new graph has been fully written. The in-process
+        // mutation mutex guards concurrent mutations within this process.
+        atomic_write(&self.path, contents.as_bytes())
             .await
             .map_err(|e| format!("Failed to write {}: {e}", self.path.display()))
     }
@@ -526,5 +532,105 @@ mod tests {
         let graph = manager.read_graph().await.unwrap();
         assert!(graph.entities.is_empty());
         assert!(graph.relations.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn memory_rewrites_preserve_private_file_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("memory.jsonl");
+        let manager = KnowledgeGraphManager::new(path.clone());
+        manager
+            .create_entities(vec![entity("alice")])
+            .await
+            .unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+        // A mutation rewrites the persistence file atomically; it must not
+        // make an existing private file more permissive.
+        manager.create_entities(vec![entity("bob")]).await.unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "mode {mode:#o}");
+        let graph = manager.read_graph().await.unwrap();
+        assert_eq!(graph.entities.len(), 2, "rewrite content is intact");
+    }
+
+    #[tokio::test]
+    async fn mutation_rewrites_produce_valid_complete_jsonl_without_temp_leftovers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("memory.jsonl");
+        let manager = KnowledgeGraphManager::new(path.clone());
+        manager
+            .create_entities(vec![entity("alice"), entity("bob")])
+            .await
+            .unwrap();
+        manager
+            .create_relations(vec![Relation {
+                from: "alice".into(),
+                to: "bob".into(),
+                relation_type: "knows".into(),
+            }])
+            .await
+            .unwrap();
+        manager
+            .add_observations(vec![ObservationInput {
+                entity_name: "alice".into(),
+                contents: vec!["speaks Spanish".into()],
+            }])
+            .await
+            .unwrap();
+
+        // The target is complete, parseable JSONL after every rewrite.
+        let raw = tokio::fs::read_to_string(&path).await.unwrap();
+        let lines: Vec<&str> = raw.lines().filter(|line| !line.trim().is_empty()).collect();
+        assert_eq!(lines.len(), 3, "{raw}");
+        for line in &lines {
+            serde_json::from_str::<GraphItem>(line).expect("each line parses as a graph item");
+        }
+
+        // No temporary files are left behind in the target directory.
+        let entries: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries, ["memory.jsonl"], "{entries:?}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn failed_write_preserves_the_existing_valid_target() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("memory.jsonl");
+        let manager = KnowledgeGraphManager::new(path.clone());
+        manager
+            .create_entities(vec![entity("alice")])
+            .await
+            .unwrap();
+
+        // A read-only directory prevents the temporary file from being
+        // created, simulating a write failure before replacement.
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+        let err = manager
+            .create_entities(vec![entity("bob")])
+            .await
+            .unwrap_err();
+        assert!(err.contains("Failed to write"), "{err}");
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        // The previous valid target survives the failed rewrite.
+        let graph = manager.read_graph().await.unwrap();
+        assert_eq!(graph.entities.len(), 1, "previous graph preserved");
+        assert_eq!(graph.entities[0].name, "alice");
+        let leftovers: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
     }
 }

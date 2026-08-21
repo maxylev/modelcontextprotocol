@@ -1,8 +1,10 @@
+mod agents;
 mod cli;
 mod fetch;
 mod fs;
 mod memory;
 mod shell;
+mod skills;
 mod support;
 
 use clap::Parser;
@@ -29,6 +31,8 @@ async fn main() -> anyhow::Result<()> {
         Some(cli::Command::Fetch(options)) => fetch::run(options).await,
         Some(cli::Command::Memory { memory_file }) => memory::run(memory_file).await,
         Some(cli::Command::Shell { dirs }) => shell::run(dirs).await,
+        Some(cli::Command::Skills { dir }) => skills::run(dir).await,
+        Some(cli::Command::Agents { dir }) => agents::run(dir).await,
         None => {
             cli::print_usage();
             std::process::exit(1);

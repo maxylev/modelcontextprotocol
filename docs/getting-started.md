@@ -1,6 +1,6 @@
 # Getting started
 
-`modelcontextprotocol` is a single Rust binary that provides four Model
+`modelcontextprotocol` is a single Rust binary that provides six Model
 Context Protocol (MCP) servers over stdio:
 
 | Server       | Identity         | What it does                                                        |
@@ -9,8 +9,10 @@ Context Protocol (MCP) servers over stdio:
 | `fetch`      | `mcp-fetch`      | Fetch URLs, convert HTML to markdown, robots.txt enforcement        |
 | `memory`     | `mcp-memory`     | Persistent knowledge-graph memory as JSONL                          |
 | `shell`      | `mcp-shell`      | Execute local programs directly with a restricted working directory |
+| `skills`     | `mcp-skills`     | Discover and progressively load workspace skill instructions        |
+| `agents`     | `mcp-agents`     | Run configured workspace subagents through external providers       |
 
-All four implement the MCP `2026-07-28` specification (see
+All six implement the MCP `2026-07-28` specification (see
 [Protocol](/protocol)).
 
 ## Requirements
@@ -167,7 +169,8 @@ cargo install --git https://github.com/maxylev/modelcontextprotocol
 ```
 
 All three install the `modelcontextprotocol` binary into your Cargo bin
-directory. The release profile is tuned for a small binary (about 5 MB).
+directory. The release profile is tuned for a small binary (about 6.5 MB on
+macOS; size varies by target).
 
 Verify the install:
 
@@ -202,6 +205,14 @@ Subcommand form:
     "shell": {
       "command": "modelcontextprotocol",
       "args": ["shell", "${HOME}/Developer/my-project"]
+    },
+    "skills": {
+      "command": "modelcontextprotocol",
+      "args": ["skills", "${HOME}/Developer/my-project"]
+    },
+    "agents": {
+      "command": "modelcontextprotocol",
+      "args": ["agents", "${HOME}/Developer/my-project"]
     }
   }
 }
@@ -227,6 +238,14 @@ Flag form:
     "shell": {
       "command": "modelcontextprotocol",
       "args": ["--shell", "${HOME}/Developer/my-project"]
+    },
+    "skills": {
+      "command": "modelcontextprotocol",
+      "args": ["--skills", "${HOME}/Developer/my-project"]
+    },
+    "agents": {
+      "command": "modelcontextprotocol",
+      "args": ["--agents", "${HOME}/Developer/my-project"]
     }
   }
 }
@@ -259,6 +278,11 @@ client, or exercise it interactively with the MCP Inspector — see
   addresses**; there is no SSRF protection.
 - Only connect these servers to clients you trust, and never expose them
   over an untrusted network. See [Security model](/security).
+- The [skills server](/servers/skills) loads repository instructions and
+  resource paths; it does not execute them automatically.
+- The [agents server](/servers/agents) may invoke external providers and child
+  tools or commands. Use only a trusted workspace and provide credentials via
+  each definition's `env_key` environment variable.
 
 ## Next steps
 

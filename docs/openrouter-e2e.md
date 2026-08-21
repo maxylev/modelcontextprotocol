@@ -1,13 +1,13 @@
 # OpenRouter E2E acceptance
 
-The gated, real-network acceptance suite in `tests/openrouter_e2e.rs` is
-the strongest verification in this repository. It exercises the whole stack
-— real MCP servers, the real protocol lifecycle, and a real frontier model
-over the real OpenRouter API.
+The gated, real-network acceptance suite in `tests/openrouter_e2e.rs` is the
+legacy chat-tool acceptance suite. It does not exercise the Skills or Agents
+tools. It drives real MCP servers, the real protocol lifecycle, and a real
+frontier model over the real OpenRouter API.
 
 ## What the suite does
 
-1. Spawns each of the four real servers in a disposable environment and
+1. Spawns the filesystem, fetch, memory, and shell servers in a disposable environment and
    connects via the modern `server/discover` lifecycle, asserting the
    negotiated protocol version (`2026-07-28`), server identity
    (`mcp-filesystem`, `mcp-fetch`, `mcp-memory`, `mcp-shell`),
@@ -47,16 +47,19 @@ deterministic helper; no destructive commands are ever executed.
   model.
 - Forced tool shape `{"type":"function","function":{...}}`;
   `parallel_tool_calls: false`, `stream: false`, `temperature: 0`.
-- Per-request: timeout 45 s, response body ≤ 1 MiB, `max_tokens` 256 per
+- Per-request: timeout 45 s, response body ≤ 1 MiB, `max_tokens` 512 per
   tool call and 200 per final answer/consumption request.
 - Retry policy: at most 2 attempts per request, retrying only transport
   errors, 429s, 5xx, and `Retry-After` responses (backoff capped at 5 s).
-  In addition, a whole roundtrip is retried exactly once for
+  In addition, a whole roundtrip is retried up to 2 times for
   model-generation flakes only: a model-echo deviation (dropped/rewritten
   argument — the argument guard runs again and still blocks before any MCP
-  execution) or an empty final answer cut off by the `length` finish
-  reason. Oracle failures, schema failures, and server failures are never
-  retried.
+  execution), truncated (unparseable JSON) arguments, a `length` finish
+  reason without the forced tool call, or an empty final answer cut off by
+  `length`. Benign default padding (schema-declared defaults, the natural
+  zero value of an optional property, and the shell `cwd` context field) is
+  stripped before comparison. Oracle failures, schema failures, and server
+  failures are never retried.
 - Suite budget: 14 minutes 30 seconds; a hard abort still reports all
   failures collected so far.
 - Tool results fed back to the model are capped at 4000 characters per call.

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
-/// Filesystem, Fetch, Memory, and Shell MCP servers in a single binary.
+/// Filesystem, Fetch, Memory, Shell, Skills, and Agents MCP servers in a single binary.
 ///
 /// Implements the Model Context Protocol (2026-07-28) over stdio. Both the
 /// subcommand form (`modelcontextprotocol filesystem <dir>`) and the
@@ -31,6 +31,14 @@ pub struct Cli {
     /// (equivalent to `shell <DIR>...`).
     #[arg(long, value_name = "DIR", num_args = 1..)]
     pub shell: Option<Vec<PathBuf>>,
+
+    /// Start the skills server for this workspace (equivalent to `skills <DIR>`).
+    #[arg(long, value_name = "DIR")]
+    pub skills: Option<PathBuf>,
+
+    /// Start the agents server for this workspace (equivalent to `agents <DIR>`).
+    #[arg(long, value_name = "DIR")]
+    pub agents: Option<PathBuf>,
 
     /// Memory file location (JSONL), used by the memory server.
     #[arg(long, value_name = "PATH")]
@@ -75,6 +83,18 @@ pub enum Command {
         #[arg(value_name = "DIR", required = true, num_args = 1..)]
         dirs: Vec<PathBuf>,
     },
+    /// Start the Agent Skills MCP server for one workspace.
+    Skills {
+        /// Workspace root containing project-local skill definitions.
+        #[arg(value_name = "DIR")]
+        dir: PathBuf,
+    },
+    /// Start the local subagents MCP server for one workspace.
+    Agents {
+        /// Workspace root containing project-local agent definitions.
+        #[arg(value_name = "DIR")]
+        dir: PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Args)]
@@ -108,29 +128,31 @@ impl Cli {
             self.fetch,
             self.memory,
             self.shell,
+            self.skills,
+            self.agents,
         ) {
-            (Some(command), None, false, false, None) => {
+            (Some(command), None, false, false, None, None, None) => {
                 if has_fetch_options || self.memory_file.is_some() {
                     None
                 } else {
                     Some(command)
                 }
             }
-            (None, Some(dirs), false, false, None) => {
+            (None, Some(dirs), false, false, None, None, None) => {
                 if has_fetch_options || self.memory_file.is_some() {
                     None
                 } else {
                     Some(Command::Filesystem { dirs })
                 }
             }
-            (None, None, true, false, None) => {
+            (None, None, true, false, None, None, None) => {
                 if self.memory_file.is_some() {
                     None
                 } else {
                     Some(Command::Fetch(self.fetch_options))
                 }
             }
-            (None, None, false, true, None) => {
+            (None, None, false, true, None, None, None) => {
                 if has_fetch_options {
                     None
                 } else {
@@ -139,11 +161,25 @@ impl Cli {
                     })
                 }
             }
-            (None, None, false, false, Some(dirs)) => {
+            (None, None, false, false, Some(dirs), None, None) => {
                 if has_fetch_options || self.memory_file.is_some() {
                     None
                 } else {
                     Some(Command::Shell { dirs })
+                }
+            }
+            (None, None, false, false, None, Some(dir), None) => {
+                if has_fetch_options || self.memory_file.is_some() {
+                    None
+                } else {
+                    Some(Command::Skills { dir })
+                }
+            }
+            (None, None, false, false, None, None, Some(dir)) => {
+                if has_fetch_options || self.memory_file.is_some() {
+                    None
+                } else {
+                    Some(Command::Agents { dir })
                 }
             }
             _ => None,
@@ -160,10 +196,14 @@ pub fn print_usage() {
          modelcontextprotocol fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]\n  \
          modelcontextprotocol memory [--memory-file <PATH>]\n  \
          modelcontextprotocol shell <DIR> [DIR ...]\n\n\
+         modelcontextprotocol skills <DIR>\n  \
+         modelcontextprotocol agents <DIR>\n\n\
          Equivalent flag forms:\n  \
          modelcontextprotocol --filesystem <DIR> [DIR ...]\n  \
          modelcontextprotocol --fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]\n  \
          modelcontextprotocol --memory [--memory-file <PATH>]\n  \
-         modelcontextprotocol --shell <DIR> [DIR ...]"
+         modelcontextprotocol --shell <DIR> [DIR ...]\n  \
+         modelcontextprotocol --skills <DIR>\n  \
+         modelcontextprotocol --agents <DIR>"
     );
 }

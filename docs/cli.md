@@ -1,90 +1,60 @@
 # Command line (CLI)
 
-The binary is invoked as `modelcontextprotocol`. Exactly **one** server must
-be selected, in one of two equivalent styles:
+Invoke the one binary as `modelcontextprotocol`. Select exactly one server in
+either equivalent form; there is no configuration-file option.
 
-- **Subcommand form** — `modelcontextprotocol <server> [options] [DIR ...]`
-- **Flag form** — `modelcontextprotocol --<server> [options] [DIR ...]`
+```text
+modelcontextprotocol filesystem <DIR> [DIR ...]
+modelcontextprotocol fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]
+modelcontextprotocol memory [--memory-file <PATH>]
+modelcontextprotocol shell <DIR> [DIR ...]
+modelcontextprotocol skills <DIR>
+modelcontextprotocol agents <DIR>
 
-The flag form exists so the binary can be wired into MCP client
-configurations that cannot pass subcommands. Both forms are normalized into
-the same command internally.
+modelcontextprotocol --filesystem <DIR> [DIR ...]
+modelcontextprotocol --fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]
+modelcontextprotocol --memory [--memory-file <PATH>]
+modelcontextprotocol --shell <DIR> [DIR ...]
+modelcontextprotocol --skills <DIR>
+modelcontextprotocol --agents <DIR>
+```
 
-## Commands
+`skills` and `agents` each take exactly one positional workspace directory.
+`filesystem` and `shell` each take one or more allowed directories.
 
-| Command                      | Required arguments     | Options                                                         | Server           |
-| ---------------------------- | ---------------------- | --------------------------------------------------------------- | ---------------- |
-| `filesystem <DIR> [DIR ...]` | at least one directory | —                                                               | `mcp-filesystem` |
-| `fetch`                      | —                      | `--ignore-robots-txt`, `--user-agent <UA>`, `--proxy-url <URL>` | `mcp-fetch`      |
-| `memory`                     | —                      | `--memory-file <PATH>`                                          | `mcp-memory`     |
-| `shell <DIR> [DIR ...]`      | at least one directory | —                                                               | `mcp-shell`      |
+| Server       | Identity         | Server-specific options                                         |
+| ------------ | ---------------- | --------------------------------------------------------------- |
+| `filesystem` | `mcp-filesystem` | none                                                            |
+| `fetch`      | `mcp-fetch`      | `--ignore-robots-txt`, `--user-agent <UA>`, `--proxy-url <URL>` |
+| `memory`     | `mcp-memory`     | `--memory-file <PATH>`                                          |
+| `shell`      | `mcp-shell`      | none                                                            |
+| `skills`     | `mcp-skills`     | none                                                            |
+| `agents`     | `mcp-agents`     | none                                                            |
 
-Equivalent flag forms:
+## Selection and validation
 
-| Flag form                      | Equivalent to                |
-| ------------------------------ | ---------------------------- |
-| `--filesystem <DIR> [DIR ...]` | `filesystem <DIR> [DIR ...]` |
-| `--fetch`                      | `fetch`                      |
-| `--memory`                     | `memory`                     |
-| `--shell <DIR> [DIR ...]`      | `shell <DIR> [DIR ...]`      |
+Selection is strict: exactly one subcommand or top-level selector must be
+present. Any mixed selectors, missing required directory, or option belonging
+to another server prints usage to stderr and exits 1. For example,
+`fetch --memory`, `skills /workspace --user-agent UA`, and
+`agents /workspace --memory-file memory.jsonl` are rejected. The two workspace
+servers have no options beyond their one positional workspace.
 
-### Fetch options
-
-| Option                      | Description                                                                                         |
-| --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `--ignore-robots-txt`       | Skip robots.txt checks for the `fetch` tool (the `fetch` prompt never checks robots.txt regardless) |
-| `--user-agent <USER_AGENT>` | Custom User-Agent header used for all requests, replacing both default agents                       |
-| `--proxy-url <URL>`         | Route all requests through this HTTP(S) proxy                                                       |
-
-### Memory options
-
-| Option                 | Description                                                                              |
-| ---------------------- | ---------------------------------------------------------------------------------------- |
-| `--memory-file <PATH>` | Location of the memory JSONL file; overrides the `MEMORY_FILE_PATH` environment variable |
-
-## Selection and conflict rules
-
-`Cli::into_command` enforces strict selection rules; any violation prints
-the usage summary to **stderr** and exits with code **1** instead of
-silently ignoring options:
-
-- Exactly one server selector (subcommand or top-level flag) must be
-  present.
-- Server-specific options may only be combined with the server they belong
-  to. Examples of rejected invocations:
-  - `--ignore-robots-txt` or `--proxy-url` with `filesystem`, `memory`, or
-    `shell`
-  - `--memory-file` with `fetch`, `filesystem`, or `shell`
-  - Two selectors at once (for example `fetch --memory`)
-  - `filesystem` with no directory (directories are `required` for
-    filesystem and shell)
-
-Server startup also validates its arguments:
-
-- `filesystem` / `shell`: each directory is expanded (`~` → home), made
-  absolute, and canonicalized. Directories that do not exist or are not
-  directories are skipped with a warning; if no usable directory remains,
-  the server exits with an error. See [Security model](/security).
-- `memory`: the resolved memory file path is made absolute relative to the
-  current working directory when needed.
+Filesystem and shell roots are expanded, made absolute, and canonicalized;
+unusable roots are warned about and startup fails when none remain. Skills and
+agents canonicalize their one workspace and require it to be a directory.
 
 ## Environment variables
 
-| Variable             | Used by        | Description                                                                                                                                                             |
-| -------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `RUST_LOG`           | all servers    | `tracing` filter. Defaults to `modelcontextprotocol=warn` when unset. Logs go to **stderr** with ANSI colors disabled; stdout carries only JSON-RPC messages            |
-| `MEMORY_FILE_PATH`   | memory         | Memory file location, overridden by `--memory-file`. Defaults to `memory.jsonl` in the current working directory                                                        |
-| `OPENROUTER_API_KEY` | E2E suite only | API key for the ignored real-network acceptance suite (`tests/openrouter_e2e.rs`). Not read by any server                                                               |
-| `OPENROUTER_MODEL`   | E2E suite only | Model override accepted by the acceptance suite for diagnostics; the acceptance default is the exact alias `~deepseek/deepseek-v4-flash-latest`. Not read by any server |
+| Variable                                 | Used by                              | Description                                                                                                       |
+| ---------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `RUST_LOG`                               | all servers                          | `tracing` filter; defaults to `modelcontextprotocol=warn`. Logs use stderr only.                                  |
+| `MEMORY_FILE_PATH`                       | memory                               | JSONL path, overridden by `--memory-file`; default `memory.jsonl` in the current directory.                       |
+| `OPENAI_API_KEY`                         | agents default OpenAI definitions    | Default `env_key` for `model_provider: openai`.                                                                   |
+| `ANTHROPIC_API_KEY`                      | agents default Anthropic definitions | Default `env_key` for `model_provider: anthropic`.                                                                |
+| a definition's `env_key`                 | agents                               | Credential for that definition; custom definitions can use different names, such as `OPENROUTER_API_KEY`.         |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | legacy OpenRouter E2E only           | Not read by the six MCP servers unless an agent definition explicitly uses `OPENROUTER_API_KEY` as its `env_key`. |
 
-## Generic flags
-
-- `--help` / `-h` — clap-generated help.
-- `--version` / `-V` — prints the crate version (for example
-  `modelcontextprotocol 0.1.0`).
-
-## Exit behavior
-
-- Selection/validation errors: usage or error message on stderr, exit code 1.
-- Once running, a server serves MCP over stdio until the transport closes
-  (the client disconnects or the parent process exits), then exits cleanly.
+`--help`/`-h` prints clap help; `--version`/`-V` prints the crate version.
+After startup, the selected server serves stdio JSON-RPC until the transport
+closes.

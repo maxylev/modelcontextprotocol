@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: modelcontextprotocol
-  text: Four MCP servers in one Rust binary
-  tagline: Filesystem, Fetch, Memory, and Shell servers implementing the Model Context Protocol 2026-07-28 specification over stdio.
+  text: Six MCP servers in one Rust binary
+  tagline: Filesystem, Fetch, Memory, Shell, Skills, and Agents servers implementing the Model Context Protocol 2026-07-28 specification over stdio.
   actions:
     - theme: brand
       text: Get started
@@ -26,10 +26,16 @@ features:
   - title: Shell server
     details: 'Executes local programs directly with an explicit argv, a restricted working directory, bounded output capture, and a per-command timeout.'
     link: /servers/shell
+  - title: Skills server
+    details: 'Discovers workspace skills and progressively loads the instructions and resource manifest for one selected skill.'
+    link: /servers/skills
+  - title: Agents server
+    details: 'Runs configured workspace subagents asynchronously through OpenAI Responses or Anthropic Messages-compatible providers.'
+    link: /servers/agents
   - title: Modern protocol
     details: 'Stateless MCP 2026-07-28 via rmcp: server/discover without an initialize handshake, cache hints on tools/list, and tool annotations.'
     link: /protocol
   - title: Verified behavior
-    details: 'Offline integration suites cover every parameter and access-control edge; a gated real-network OpenRouter acceptance suite exercises the whole stack.'
+    details: 'Offline integration suites cover all six servers; an optional live-provider smoke session is separate from the existing OpenRouter chat harness.'
     link: /verification
 ---

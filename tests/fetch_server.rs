@@ -25,6 +25,10 @@ const PAGE_HTML: &str = "<!DOCTYPE html><html><head><title>Test Page</title></he
 
 const BIG_BODY: &str = "The quick brown fox jumps over the lazy dog. ";
 
+/// Mirror of the production raw-response safety limit
+/// (`src/fetch/http.rs::MAX_RESPONSE_BODY_BYTES`, 8 MiB).
+const RAW_BODY_LIMIT: usize = 8 * 1024 * 1024;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum RobotsMode {
     /// `User-agent: *\nDisallow: /`
@@ -79,6 +83,48 @@ fn response(status: u16, content_type: &str, body: String) -> Response<std::io::
     )
 }
 
+/// Response without a `Content-Length` (chunked transfer), so the client
+/// cannot know the size in advance.
+fn response_chunked(
+    status: u16,
+    content_type: &str,
+    body: String,
+) -> Response<std::io::Cursor<Vec<u8>>> {
+    let bytes = body.into_bytes();
+    let headers = vec![
+        Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes()).expect("valid header"),
+    ];
+    Response::new(
+        StatusCode(status),
+        headers,
+        std::io::Cursor::new(bytes),
+        None,
+        None,
+    )
+}
+
+/// Response that forces a real `Content-Length` header even for large
+/// bodies by raising tiny_http's chunked-encoding threshold well above the
+/// body size.
+fn response_with_content_length(
+    status: u16,
+    content_type: &str,
+    body: String,
+) -> Response<std::io::Cursor<Vec<u8>>> {
+    let bytes = body.into_bytes();
+    let headers = vec![
+        Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes()).expect("valid header"),
+    ];
+    Response::new(
+        StatusCode(status),
+        headers,
+        std::io::Cursor::new(bytes.clone()),
+        Some(bytes.len()),
+        None,
+    )
+    .with_chunked_threshold(2 * RAW_BODY_LIMIT)
+}
+
 fn route(request: &tiny_http::Request, robots: RobotsMode) -> Response<std::io::Cursor<Vec<u8>>> {
     let url = request.url().to_string();
     let user_agent = request
@@ -114,6 +160,26 @@ fn route(request: &tiny_http::Request, robots: RobotsMode) -> Response<std::io::
                 format!("<html><body><article>{body}</article></body></html>"),
             )
         }
+        "/large-allowed" => response(
+            200,
+            "text/html; charset=utf-8",
+            format!(
+                "<html><body><article>{}</article></body></html>",
+                BIG_BODY.repeat(20_000)
+            ),
+        ),
+        // 8 MiB + 1 with a real Content-Length header.
+        "/huge-content-length" => response_with_content_length(
+            200,
+            "text/html; charset=utf-8",
+            format!("OVERSIZED_BODY_START{}", "x".repeat(RAW_BODY_LIMIT + 1)),
+        ),
+        // 8 MiB + 1 with no Content-Length (chunked/unknown length).
+        "/huge-chunked" => response_chunked(
+            200,
+            "text/html; charset=utf-8",
+            format!("OVERSIZED_BODY_START{}", "x".repeat(RAW_BODY_LIMIT + 1)),
+        ),
         "/echo-ua" => response(200, "text/plain", user_agent),
         "/missing" => response(404, "text/plain", "not found".into()),
         "/error" => response(500, "text/plain", "server error".into()),
@@ -719,6 +785,88 @@ async fn wrong_or_missing_arguments_are_rejected() {
                 text(&result)
             );
         }
+    })
+    .await;
+}
+
+// ---------------------------------------------------------------------------
+// Raw response body safety limit
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn oversized_content_length_response_is_rejected() {
+    let server = TestServer::start(RobotsMode::AllowAll);
+    let client = connect_fetch(&[]).await;
+    run_test(async move {
+        let url = format!("{}/huge-content-length", server.base_url());
+        // Rejected regardless of the (default) max_length.
+        let result = call_tool(&client, "fetch", serde_json::json!({ "url": url })).await;
+        assert_eq!(result.is_error, Some(true));
+        let content = text(&result);
+        assert!(
+            content.contains("safety limit"),
+            "clear bounded error: {content}"
+        );
+        assert!(
+            !content.contains("OVERSIZED_BODY_START"),
+            "remote body leaked into error: {content}"
+        );
+
+        // A tiny max_length must NOT make the oversized raw body acceptable:
+        // the raw network bound is independent of output truncation.
+        let result = call_tool(
+            &client,
+            "fetch",
+            serde_json::json!({ "url": url, "max_length": 1 }),
+        )
+        .await;
+        assert_eq!(result.is_error, Some(true));
+        assert!(text(&result).contains("safety limit"));
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn chunked_unknown_length_response_exceeding_bound_is_rejected() {
+    let server = TestServer::start(RobotsMode::AllowAll);
+    let client = connect_fetch(&[]).await;
+    run_test(async move {
+        let url = format!("{}/huge-chunked", server.base_url());
+        let result = call_tool(
+            &client,
+            "fetch",
+            serde_json::json!({ "url": url, "max_length": 10 }),
+        )
+        .await;
+        assert_eq!(result.is_error, Some(true));
+        let content = text(&result);
+        assert!(
+            content.contains("safety limit"),
+            "chunked oversize rejected while reading: {content}"
+        );
+        assert!(!content.contains("OVERSIZED_BODY_START"));
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn large_body_under_the_raw_bound_succeeds_and_truncation_still_applies() {
+    let server = TestServer::start(RobotsMode::AllowAll);
+    let client = connect_fetch(&[]).await;
+    run_test(async move {
+        // ~460 KB of HTML, far above any max_length but below the 8 MiB raw
+        // bound: must succeed and honor character-based max_length.
+        let url = format!("{}/large-allowed", server.base_url());
+        let result = call_tool(
+            &client,
+            "fetch",
+            serde_json::json!({ "url": url, "max_length": 200 }),
+        )
+        .await;
+        assert_eq!(result.is_error, Some(false), "got: {}", text(&result));
+        let content = text(&result);
+        assert!(content.contains("Content truncated"), "got: {content}");
+        assert!(content.contains("The quick brown fox"), "got: {content}");
     })
     .await;
 }

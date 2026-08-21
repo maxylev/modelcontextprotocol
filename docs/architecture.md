@@ -1,93 +1,101 @@
 # Architecture
 
-A single Rust binary, four independent MCP servers. The crate is a
-workspace-free package (`Cargo.toml`, edition 2024, MSRV 1.97) whose only
-binary target is `modelcontextprotocol`.
+One Rust binary, six independent MCP servers. The workspace-free package
+(`Cargo.toml`, edition 2024, MSRV 1.97) has one binary target,
+`modelcontextprotocol`.
 
 ## Source layout
 
-```
+```text
 src/
-├── main.rs            # entry point: tracing init, CLI parse, dispatch
-├── cli.rs             # clap definitions, flag/subcommand normalization, usage
-├── fs/                # filesystem server
-│   ├── mod.rs         #   server + 14 tools
-│   ├── edit.rs        #   line-based edits + git-style diff rendering
-│   ├── format.rs      #   size formatting, head/tail line helpers
-│   └── search.rs      #   glob search + directory tree
-├── fetch/             # fetch server
-│   ├── mod.rs         #   server, fetch tool + fetch prompt
-│   └── http.rs        #   reqwest client, robots.txt logic, HTML→markdown
-├── memory/            # memory server
-│   ├── mod.rs         #   server, 9 tools, resource + subscriptions
-│   └── graph.rs       #   knowledge graph, JSONL persistence
-├── shell/             # shell server
-│   ├── mod.rs         #   server, execute_command tool
-│   └── drain.rs       #   bounded stream capture
-└── support/           # shared, server-neutral code
-    ├── mod.rs         #   SPEC_VERSION, text/error result helpers
-    └── access.rs      #   AccessControl: roots, normalization, symlink checks
+├── main.rs            # tracing, CLI parse, six-way dispatch
+├── cli.rs             # clap definitions and strict selector normalization
+├── fs/                # filesystem server (14 tools)
+├── fetch/             # fetch server (tool and prompt)
+├── memory/            # memory server (9 tools, resource, subscriptions)
+├── shell/             # shell server (execute_command)
+├── skills/            # skills registry, SKILL.md parser, resource manifest
+├── agents/            # definitions, discovery, provider/runtime, child MCP
+└── support/           # protocol constants, results, shared access control
 ```
 
-**Dependency direction:** `main`/CLI → concrete servers (`fs`, `fetch`,
-`memory`, `shell`) → `support` → external crates. Concrete servers never
-depend on one another; everything they share lives in `support`.
+`main` and `cli` dispatch to concrete servers. Filesystem and shell share
+`support::access`. Skills owns the workspace `SkillRegistry`; agents creates
+the same registry for its workspace and uses it to preload an agent's named
+skills. Concrete server modules otherwise do not depend on one another.
 
-## Key design decisions
+## Design decisions
 
-- **One binary, four identities.** Each server advertises a distinct
-  implementation name (`mcp-filesystem`, `mcp-fetch`, `mcp-memory`,
-  `mcp-shell`) with the crate version, so a single install serves all four
-  MCP server entries in a client configuration.
-- **Two CLI styles.** `Cli::into_command` normalizes the subcommand and
-  flag forms into one command and rejects ambiguous or conflicting
-  invocations before any server starts (see [CLI](/cli)).
-- **Shared path security.** `AccessControl` (used by filesystem and shell)
-  canonicalizes allowed roots once and validates every requested path —
-  lexical normalization, `~` expansion, relative-path resolution against
-  the first root, and canonicalization with symlink-escape rejection (see
-  [Security model](/security)).
-- **rmcp protocol layer.** Servers are `ServerHandler` implementations over
-  rmcp 3.1 (`transport-io`), with tool/prompt routers driven by the
-  `#[tool]` / `#[prompt]` macros and schemars-generated JSON Schemas. The
-  protocol version is `2026-07-28` (see [Protocol](/protocol)).
-- **Async throughout.** tokio (multi-thread runtime) with `fs`, `process`,
-  `time`, and `io-util` features; all file, process, and network I/O is
-  async.
-- **Small release binary.** `opt-level = "z"`, `lto = "fat"`,
-  `codegen-units = 1`, `strip = true`; TLS uses the `ring` backend
-  (reqwest `rustls-no-provider`, with the provider installed explicitly at
-  startup) instead of aws-lc-rs. The resulting binary is about 5 MB.
+- **One binary, six identities.** `mcp-filesystem`, `mcp-fetch`,
+  `mcp-memory`, `mcp-shell`, `mcp-skills`, and `mcp-agents` all advertise the
+  crate version. A client config launches the same executable with one
+  selector.
+- **Strict CLI narrowing.** `Cli::into_command` accepts exactly one of the
+  six subcommands or equivalent flags, rejects cross-server options, and has
+  no config-file option. Skills and agents each accept one workspace.
+- **Protocol narrowing.** Every server supports only MCP `2026-07-28` via
+  the shared `SUPPORTED_PROTOCOL_VERSIONS`. Child MCP clients used by agents
+  require discovery at that same protocol version.
+- **Snapshot registries.** Skills and agents discover canonical workspace
+  paths once at startup, retain deterministic precedence/name collision
+  winners, and do not watch for changes. Skills activation reparses the
+  selected file before returning it.
+- **Async agents.** Agent sessions are process-local and retain a frozen
+  definition, frozen context, provider-native conversation, and latest public
+  result. Runs are capacity-limited to 8 and execute in Tokio tasks. Child
+  stdio/HTTP MCP connections and permits belong to a run, are recreated on
+  resume, and are shut down with bounded timeouts. Up to 64 terminal sessions
+  are retained by a lazy count-bounded LRU policy.
+- **Dependencies and size.** Agents/skills add YAML and TOML parsing,
+  UUID v7 identifiers, cancellation utilities, URL validation, and rmcp
+  client/child-process/streamable-HTTP features. Release settings remain
+  `opt-level = "z"`, fat LTO, one codegen unit, and stripping: the release-size
+  goal remains a minimal binary; the measured macOS build is about 6.5 MB and
+  varies by target.
 
-## Concurrency within a server
+The agents lifecycle is deliberately split:
 
-- **Memory:** a tokio mutex serializes graph load/modify/save so concurrent
-  mutations cannot interleave; a broadcast channel (capacity 16) fans
-  graph-change notifications out to subscribed clients, and
-  `subscriptions/listen` forwards them while honoring cancellation.
-- **Shell:** stdout/stderr are drained concurrently by two tasks, each
-  bounded to 1 MiB (the pipe keeps being drained past the limit so the
-  child never blocks); the child is killed and reaped on timeout, and
-  `kill_on_drop` reaps it if the request is cancelled.
-- **Fetch:** one shared reqwest client with a fixed 30-second request
-  timeout; robots.txt checks and fetches share the same client.
+```text
+AgentDefinition
+      ↓
+AgentSession
+      ├── frozen definition and system context
+      ├── provider-native conversation history
+      ├── state, latest result/error, and activity
+      └── no idle child MCP connections
+            │
+            ├── AgentRun #1
+            │     ├── capacity permit
+            │     ├── child MCP manager
+            │     ├── provider/tool loop
+            │     └── bounded cleanup
+            │
+            └── AgentRun #2
+                  ├── fresh permit
+                  ├── fresh child MCP manager
+                  ├── same conversation
+                  └── bounded cleanup
+```
+
+`AgentSession` is not an MCP transport session, and `AgentRun` is not an
+`AgentSession`. The former is the retained logical subagent; the latter is one
+bounded execution using disposable external connections. No automatic context
+compaction or persistent conversation store exists.
 
 ## Testing architecture
 
-- `tests/*_server.rs` — offline integration suites that spawn the real
-  binary over stdio with the rmcp client and cover every tool parameter,
-  access-control edge case, robots.txt behavior, truncation pagination,
-  user agents, prompts, resources, subscriptions, and persistence.
-- `tests/common/mod.rs` — shared protocol helpers.
-- `tests/openrouter_e2e.rs` + `tests/openrouter/` — the gated real-network
-  acceptance suite: case catalog, harness, schema normalizer/validator, and
-  sanitized metrics (see [OpenRouter E2E](/openrouter-e2e) and the
-  [Coverage matrix](/coverage)).
+Offline integration suites spawn the real binary over stdio for the original
+servers and the skills/agents registries. `tests/skills_server.rs` covers
+discovery, activation, precedence, validation, manifests, and containment.
+`tests/agents_server.rs` covers definition discovery, tool schemas, lifecycle,
+limits, credential isolation, redirect handling, and the Responses adapter
+with local fixtures. Unit suites cover child MCP safety, parsers, and shared
+skill loading. A live-provider smoke session is optional rather than an E2E
+suite. The older OpenRouter chat acceptance harness covers its existing
+catalog; it is not a claim of coverage for the new agents tools.
 
 ## Docs site
 
-The documentation you are reading is built with VitePress 2
-(2.0.0-alpha.19) from `docs/`, with a small custom theme in
-`docs/.vitepress/theme/` (default theme + custom CSS, no components).
-`cargo doc` output is copied into the built site under `/rustdoc/` by the
-publishing workflow (see [CI & publishing](/ci-publishing)).
+VitePress 2 builds `docs/`; the custom theme is in
+`docs/.vitepress/theme/`. The publishing workflow copies `cargo doc` output
+under `/rustdoc/`.

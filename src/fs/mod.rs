@@ -2,7 +2,7 @@ mod edit;
 mod format;
 mod search;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use rmcp::{
@@ -16,9 +16,8 @@ use rmcp::{
     schemars, tool, tool_handler, tool_router,
 };
 use serde::Deserialize;
-use tokio::io::AsyncWriteExt;
 
-use crate::support::{AccessControl, SPEC_VERSION, text_result, tool_error};
+use crate::support::{AccessControl, SPEC_VERSION, atomic_write, text_result, tool_error};
 
 use self::edit::{EditOperation, apply_edits, render_diff};
 use self::format::{format_size, head_lines, tail_lines};
@@ -763,32 +762,24 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
-/// Replace `path` contents atomically: write a unique temp file next to the
-/// target, then rename over it. Renames do not follow symlinks.
-async fn atomic_write(path: &Path, content: &[u8]) -> std::io::Result<()> {
-    let unique = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let mut temp_name = path.as_os_str().to_os_string();
-    temp_name.push(format!(".{unique}.tmp"));
-    let temp = PathBuf::from(temp_name);
-
-    let result = async {
-        let mut file = tokio::fs::File::create(&temp).await?;
-        file.write_all(content).await?;
-        file.sync_all().await?;
-        tokio::fs::rename(&temp, path).await
-    }
-    .await;
-    if result.is_err() {
-        let _ = tokio::fs::remove_file(&temp).await;
-    }
-    result
-}
-
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for FilesystemServer {
+    fn initialize(
+        &self,
+        _request: rmcp::model::InitializeRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> impl std::future::Future<Output = Result<rmcp::model::InitializeResult, McpError>>
+    + rmcp::service::MaybeSendFuture
+    + '_ {
+        crate::support::reject_legacy_initialize()
+    }
+
+    fn supported_protocol_versions(
+        &self,
+    ) -> std::borrow::Cow<'static, [rmcp::model::ProtocolVersion]> {
+        std::borrow::Cow::Borrowed(crate::support::SUPPORTED_PROTOCOL_VERSIONS)
+    }
+
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new(

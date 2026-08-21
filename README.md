@@ -3,7 +3,7 @@
 [![CI](https://github.com/maxylev/modelcontextprotocol/actions/workflows/ci.yml/badge.svg)](https://github.com/maxylev/modelcontextprotocol/actions/workflows/ci.yml)
 [![Docs](https://github.com/maxylev/modelcontextprotocol/actions/workflows/docs.yml/badge.svg)](https://github.com/maxylev/modelcontextprotocol/actions/workflows/docs.yml)
 
-Four Model Context Protocol (MCP) servers in a single Rust binary,
+Six Model Context Protocol (MCP) servers in a single Rust binary,
 implementing the [MCP `2026-07-28` specification](https://modelcontextprotocol.io/specification/2026-07-28)
 over stdio:
 
@@ -13,6 +13,8 @@ over stdio:
 | `fetch`      | `mcp-fetch`      | Fetch URLs, convert HTML to markdown, robots.txt enforcement                   |
 | `memory`     | `mcp-memory`     | Persistent knowledge-graph memory (entities, relations, observations) as JSONL |
 | `shell`      | `mcp-shell`      | Execute local programs directly with a restricted working directory            |
+| `skills`     | `mcp-skills`     | Discover and progressively load workspace skill instructions                    |
+| `agents`     | `mcp-agents`     | Run configured workspace subagents through external model providers             |
 
 Built on the official Rust SDK (`rmcp` 3.1). The `2026-07-28` protocol is
 stateless: `server/discover` without an `initialize` handshake, cache hints
@@ -20,7 +22,7 @@ on `tools/list`, and per-tool annotations.
 
 **Full documentation: <https://maxylev.github.io/modelcontextprotocol/>**
 (usage, CLI reference, protocol details, security model, tool reference for
-all 25 tools, coverage matrix, and CI/CD notes).
+all 29 tools, coverage matrix, and CI/CD notes).
 
 ## Installation
 
@@ -151,7 +153,7 @@ Or install directly from the repository:
 cargo install --git https://github.com/maxylev/modelcontextprotocol
 ```
 
-The release binary is about 5 MB. Building from source requires Rust 1.97+
+The release binary is about 6.5 MB on macOS (size varies by target). Building from source requires Rust 1.97+
 (MSRV); the prebuilt binaries above run on Linux / macOS / Windows / Android.
 
 ## Quick start
@@ -177,14 +179,32 @@ binary fits any MCP client. Subcommand form (recommended):
     "memory": {
       "command": "modelcontextprotocol",
       "args": ["memory"]
+    },
+    "skills": {
+      "command": "modelcontextprotocol",
+      "args": ["skills", "~/Developer/my-project"]
+    },
+    "agents": {
+      "command": "modelcontextprotocol",
+      "args": ["agents", "~/Developer/my-project"],
+      "env": {
+        "OPENAI_REVIEWER_API_KEY": "${OPENAI_REVIEWER_API_KEY}",
+        "ANTHROPIC_RESEARCHER_API_KEY": "${ANTHROPIC_RESEARCHER_API_KEY}"
+      }
     }
   }
 }
 ```
 
-Flag form (`--filesystem <DIR>`, `--fetch`, `--memory`, `--shell <DIR>`)
+Flag form (`--filesystem <DIR>`, `--fetch`, `--memory`, `--shell <DIR>`,
+`--skills <DIR>`, `--agents <DIR>`)
 is equivalent. See the [CLI reference](https://maxylev.github.io/modelcontextprotocol/cli.html)
 for all options, conflict rules, and environment variables.
+
+Agent credentials are supplied to the same binary through each definition's
+`env_key`: OpenAI and Anthropic definitions default to `OPENAI_API_KEY` and
+`ANTHROPIC_API_KEY`; a custom definition can use `OPENROUTER_API_KEY` or
+another environment variable. Do not put credentials in agent files.
 
 ### Adding to your MCP client
 
@@ -226,7 +246,14 @@ Quick smoke test with a generic MCP client: start
   (no SSRF protection); only enable it for trusted clients. Requests are
   bounded by a 30-second timeout and robots.txt policy.
 - Filesystem access is restricted to configured directories with symlink
-  protection — access control, not a sandbox.
+  protection — workspace access control, not an OS sandbox.
+- **Skills server:** skill files are repository instructions. Activation loads
+  instructions and resource paths only; it does not automatically execute
+  instructions or resources.
+- **Agents server:** agents can call external providers and configured child
+  tools or commands. Enable it only for a trusted workspace. Provider secrets
+  are read from the environment variable named by each agent's `env_key`;
+  never place keys in agent definitions.
 - See the [security model](https://maxylev.github.io/modelcontextprotocol/security.html)
   for details.
 
@@ -240,8 +267,10 @@ cargo build --release
 ```
 
 A gated, real-network acceptance suite (`tests/openrouter_e2e.rs`, ignored
-by default) drives every tool through real OpenRouter roundtrips; it
-requires `OPENROUTER_API_KEY` and spends tokens. Run it with:
+by default) drives the filesystem, fetch, memory, and shell catalogs through
+real OpenRouter roundtrips. The agents provider smoke test is documented
+separately in the verification guide. Both require `OPENROUTER_API_KEY` and
+spend tokens. Run the original catalog suite with:
 
 ```bash
 OPENROUTER_API_KEY=<key in the environment> \
@@ -255,8 +284,8 @@ are `npm run format:check` and `npm run docs:build`.
 
 ## Repository layout
 
-- `src/` — the binary: `cli.rs` (CLI), `fs/`, `fetch/`, `memory/`,
-  `shell/` (servers), `support/` (shared access control and helpers).
+- `src/` — the binary: `cli.rs` (CLI), `fs/`, `fetch/`, `memory/`, `shell/`,
+  `skills/`, and `agents/` (servers), `support/` (shared helpers).
 - `tests/` — integration suites per server plus the gated OpenRouter E2E
   harness (`openrouter/`).
 - `docs/` — VitePress documentation site (deployed to GitHub Pages).

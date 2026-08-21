@@ -9,6 +9,12 @@ pub const DEFAULT_USER_AGENT_MANUAL: &str =
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Hard upper bound on the raw HTTP response body the fetch client will
+/// buffer. `max_length` in the fetch tool is character-based output
+/// truncation and must never be treated as the network safety limit, so an
+/// oversized remote body is aborted here regardless of `max_length`.
+pub const MAX_RESPONSE_BODY_BYTES: usize = 8 * 1024 * 1024;
+
 /// Install the `ring` rustls crypto provider, required by reqwest's
 /// `rustls-no-provider` feature. Safe to call repeatedly; only the first
 /// install in a process takes effect.
@@ -16,6 +22,13 @@ fn install_rustls_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
+/// Trust boundary: the fetch server deliberately accepts arbitrary
+/// http/https URLs, including localhost, loopback, link-local, and private
+/// (RFC 1918) destinations reachable by the MCP process. There is
+/// intentionally no SSRF-style destination policy — only enable this server
+/// for trusted clients. This is documented product intent (see README and
+/// docs/security.md), not an oversight.
+///
 /// Thin wrapper around an HTTP client with a fixed request timeout.
 pub struct FetchClient {
     client: reqwest::Client,
@@ -46,19 +59,70 @@ impl FetchClient {
             .send()
             .await
             .map_err(|e| format!("Failed to fetch {url}: {e:?}"))?;
-        let status = response.status().as_u16();
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or_default()
-            .to_string();
-        let body = response
-            .text()
+        read_bounded_response(response, url).await
+    }
+}
+
+/// Read a response body with the hard [`MAX_RESPONSE_BODY_BYTES`] bound,
+/// mirroring the bounded provider-response reader used by the agents
+/// runtime: reject an oversized `Content-Length` up front (without relying
+/// on it), then read chunk-by-chunk and abort as soon as the limit would be
+/// exceeded. Never allocates an unbounded buffer and never includes remote
+/// body content in error messages.
+async fn read_bounded_response(
+    mut response: reqwest::Response,
+    url: &str,
+) -> Result<(String, String, u16), String> {
+    let status = response.status().as_u16();
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_RESPONSE_BODY_BYTES as u64)
+    {
+        return Err(response_too_large(url));
+    }
+
+    let mut body = Vec::with_capacity(
+        response
+            .content_length()
+            .map(|length| length.min(MAX_RESPONSE_BODY_BYTES as u64) as usize)
+            .unwrap_or(0),
+    );
+    loop {
+        let chunk = response
+            .chunk()
             .await
             .map_err(|e| format!("Failed to read response body from {url}: {e}"))?;
-        Ok((body, content_type, status))
+        let Some(chunk) = chunk else {
+            break;
+        };
+        if body.len().saturating_add(chunk.len()) > MAX_RESPONSE_BODY_BYTES {
+            return Err(response_too_large(url));
+        }
+        body.extend_from_slice(&chunk);
     }
+    Ok((decode_text(&body), content_type, status))
+}
+
+fn response_too_large(url: &str) -> String {
+    format!("Response body from {url} exceeds the {MAX_RESPONSE_BODY_BYTES} byte safety limit")
+}
+
+/// Decode a bounded response body as text. Strips a UTF-8 byte-order mark
+/// and decodes lossily (invalid sequences become U+FFFD), matching the
+/// previous `reqwest::Response::text()` behavior for UTF-8 responses.
+/// Declared non-UTF-8 charsets fall back to UTF-8 decoding; this is a
+/// deliberate tradeoff to avoid pulling in an encoding library for an edge
+/// case of a model-facing fetcher.
+fn decode_text(body: &[u8]) -> String {
+    let body = body.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(body);
+    String::from_utf8_lossy(body).into_owned()
 }
 
 /// Build the robots.txt URL for a website URL.

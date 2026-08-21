@@ -357,6 +357,22 @@ fn resource_text(graph: &KnowledgeGraph) -> String {
 
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for MemoryServer {
+    fn initialize(
+        &self,
+        _request: rmcp::model::InitializeRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> impl std::future::Future<Output = Result<rmcp::model::InitializeResult, McpError>>
+    + rmcp::service::MaybeSendFuture
+    + '_ {
+        crate::support::reject_legacy_initialize()
+    }
+
+    fn supported_protocol_versions(
+        &self,
+    ) -> std::borrow::Cow<'static, [rmcp::model::ProtocolVersion]> {
+        std::borrow::Cow::Borrowed(crate::support::SUPPORTED_PROTOCOL_VERSIONS)
+    }
+
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(
             ServerCapabilities::builder()

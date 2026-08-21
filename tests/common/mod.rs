@@ -24,6 +24,9 @@ pub async fn call_tool(client: &Client, name: &str, args: serde_json::Value) -> 
 }
 
 /// Concatenated text content of a tool result.
+///
+/// Integration tests compile this module independently, so not every crate uses it.
+#[allow(dead_code)]
 pub fn text(result: &CallToolResult) -> String {
     result
         .content

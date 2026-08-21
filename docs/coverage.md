@@ -3,7 +3,7 @@ title: Coverage matrix
 description: The OpenRouter e2e case catalog — every tool, parameter, and protocol flow exercised by the acceptance suite.
 ---
 
-# OpenRouter e2e coverage matrix
+# Coverage matrix
 
 Maintained in sync with the semantic case catalog in
 `tests/openrouter/cases.rs` and the runtime tool inventory. For the
@@ -61,6 +61,16 @@ openrouter_e2e -- --ignored`) against the real OpenRouter API, one forced
   arguments must also equal the case's intended arguments (modulo
   schema-declared default padding) — a deviation blocks MCP execution and
   is reported, never retried.
+
+## Legacy OpenRouter chat harness
+
+The matrix below is the catalog exercised by `tests/openrouter_e2e.rs`. It
+covers the original filesystem, fetch, memory, and shell inventory. It does
+**not** cover `activate_skill`, `spawn_agent`, `send_input`, or `wait_agent`.
+Those new tools have offline integration coverage. The optional
+`tests/agents_openrouter_e2e.rs` test uses `.env.test` environment loading and
+the Responses adapter; it is separate from the legacy harness. Never commit
+or log that file or its values.
 
 ## Tool inventory and case matrix
 

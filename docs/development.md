@@ -13,7 +13,7 @@
 cargo fmt                    # format
 cargo clippy --all-targets --all-features -- -D warnings   # lint
 cargo test --all-targets --all-features --locked           # unit + integration
-cargo build --release        # release binary (~5 MB, tuned profile)
+cargo build --release        # size-tuned release binary (~6.5 MB on macOS)
 cargo doc --no-deps          # rustdoc for the docs site
 ```
 
@@ -29,6 +29,8 @@ tests use deterministic local `tiny_http` fixtures on `127.0.0.1`).
 | `tests/fetch_server.rs`                        | Fetch server: robots.txt modes, truncation, user agents, prompt, bounds    |
 | `tests/memory_server.rs`                       | Memory server: graph lifecycle, JSONL persistence, resource, subscriptions |
 | `tests/shell_server.rs`                        | Shell server: argv/cwd/timeout/truncation/exit codes, access validation    |
+| `tests/skills_server.rs`                       | Skills server: discovery, activation, manifests, containment               |
+| `tests/agents_server.rs`                       | Agents server: definitions, lifecycle, provider/child-MCP safety           |
 | `tests/common/mod.rs`                          | Shared MCP client helpers                                                  |
 | `tests/openrouter_e2e.rs`, `tests/openrouter/` | Gated real-network acceptance suite (ignored by default)                   |
 
@@ -56,6 +58,19 @@ env -u OPENROUTER_MODEL cargo test --test openrouter_e2e \
 It spends real tokens and takes minutes; bounds, retry policy, and the most
 recent verified run are documented on the [OpenRouter E2E](/openrouter-e2e)
 page.
+
+For the opt-in live agents test, load uncommitted secrets from `.env.test`
+rather than placing values in a command or definition:
+
+```bash
+set -a
+. ./.env.test
+set +a
+cargo test --test agents_openrouter_e2e -- --ignored --test-threads=1
+```
+
+Never commit or log `.env.test` or its values. The ordinary offline command
+above remains the required secret-free coverage for all six servers.
 
 ## Docs site tooling
 

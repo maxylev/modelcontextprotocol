@@ -21,6 +21,8 @@ const nav = [
       { text: 'Fetch', link: '/servers/fetch' },
       { text: 'Memory', link: '/servers/memory' },
       { text: 'Shell', link: '/servers/shell' },
+      { text: 'Skills', link: '/servers/skills' },
+      { text: 'Agents', link: '/servers/agents' },
     ],
   },
   { text: 'CLI', link: '/cli' },
@@ -57,6 +59,8 @@ const sidebar = [
       { text: 'Fetch server', link: '/servers/fetch' },
       { text: 'Memory server', link: '/servers/memory' },
       { text: 'Shell server', link: '/servers/shell' },
+      { text: 'Skills server', link: '/servers/skills' },
+      { text: 'Agents server', link: '/servers/agents' },
     ],
   },
   {
@@ -84,7 +88,7 @@ export default defineConfig({
   lang: 'en-US',
   title: 'modelcontextprotocol',
   description:
-    'Filesystem, Fetch, Memory, and Shell MCP servers in a single Rust binary, implementing the Model Context Protocol 2026-07-28 specification.',
+    'Filesystem, Fetch, Memory, Shell, Skills, and Agents MCP servers in a single Rust binary, implementing the Model Context Protocol 2026-07-28 specification.',
   base: '/modelcontextprotocol/',
   cleanUrls: true,
   lastUpdated: true,
@@ -95,7 +99,7 @@ export default defineConfig({
       {
         name: 'description',
         content:
-          'Four Model Context Protocol servers (filesystem, fetch, memory, shell) in one Rust binary. Documentation, CLI reference, protocol details, and security model.',
+          'Six Model Context Protocol servers (filesystem, fetch, memory, shell, skills, agents) in one Rust binary. Documentation, CLI reference, protocol details, and security model.',
       },
     ],
   ],

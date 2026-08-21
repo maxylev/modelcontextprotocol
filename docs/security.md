@@ -1,6 +1,6 @@
 # Security model
 
-This page states what each server is and — just as importantly — what it is
+This page states what each of the six servers is and — just as importantly — what it is
 **not**. The servers run with the OS permissions of the MCP server process;
 none of them is a sandbox. Connect them only to clients you trust, and
 never expose them over an untrusted network.
@@ -107,7 +107,7 @@ network access, filesystem access — everything the user can do.
 
 ## CLI-level protections
 
-- Exactly one server can be selected, and server-specific options may only
+- Exactly one of six servers can be selected, and server-specific options may only
   be combined with their server (see [CLI](/cli)); misconfigurations fail
   loudly instead of being silently ignored.
 - Startup validation rejects unusable configurations (for example no
@@ -119,3 +119,23 @@ network access, filesystem access — everything the user can do.
 - The E2E acceptance suite sanitizes its output: the API key, authorization
   headers, and raw response bodies are never printed (see
   [OpenRouter E2E](/openrouter-e2e)).
+
+## Skills server: instructions, not execution
+
+Skills are repository content. The server constrains discovery and manifests
+to the selected workspace and rejects escaping symlink targets, but that is
+workspace access control rather than an OS sandbox. `activate_skill` returns
+instructions and resource paths only: it never automatically executes a skill
+body, script, command, or resource. Review and trust the workspace before
+enabling this server.
+
+## Agents server: external authority
+
+Agents send prompts to their configured external model provider and can start
+configured child MCP commands or call child HTTP servers. Definitions and
+skills are therefore trusted workspace inputs, not a security boundary.
+Provider credentials come only from the environment variable named by
+`env_key`; literal key/token fields are rejected. Do not commit or log those
+environment values. Agent permission, sandbox, and isolation fields do not
+create OS-level isolation. Enable agents only for a workspace, client, and
+child-server configuration you trust.
