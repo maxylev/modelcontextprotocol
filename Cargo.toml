@@ -33,7 +33,10 @@ url = "2"
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 robotstxt = "0.3"
-html2md = "0.2"
+# html2md 0.2.17 pins jni 0.22.4 for its Android JNI module, whose
+# get_string/new_string API was removed, breaking Android builds. Pin 0.2.15
+# (jni 0.19.0), which builds for every release target.
+html2md = "=0.2.15"
 globset = "0.4"
 similar = "3"
 mime_guess = "2"
