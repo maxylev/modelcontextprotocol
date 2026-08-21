@@ -12,7 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use common::{Client, call_tool, text};
+use common::{Client, call_tool, python_invocation, text};
 use rmcp::{
     ClientHandler, RoleClient,
     model::{CallToolRequestParams, ProgressNotificationParam},
@@ -299,11 +299,22 @@ with open(log, "a", encoding="utf-8") as events:
     )
     .unwrap();
     let definition = |name: &str, mode: &str| {
+        let invocation = python_invocation();
+        let (command, invocation_args) = invocation.split_first().expect("non-empty argv");
+        let mut args: Vec<String> = invocation_args
+            .iter()
+            .map(|arg| format!("\"{arg}\""))
+            .collect();
+        args.extend([
+            format!("\"{}\"", helper.display()),
+            format!("\"{mode}\""),
+            format!("\"{}\"", log.display()),
+            "\"450\"".to_string(),
+        ]);
         format!(
-            "name = \"{name}\"\ndescription = \"child lifecycle fixture\"\ninstructions = \"child fixture\"\nmodel = \"fixture-model\"\nmodel_provider = \"custom\"\nbase_url = \"{}\"\nenv_key = \"TEST_AGENT_KEY\"\nwire_api = \"responses\"\n\n[mcp_servers.fixture]\ntype = \"stdio\"\ncommand = \"python3\"\nargs = [\"{}\", \"{mode}\", \"{}\", \"450\"]\n",
+            "name = \"{name}\"\ndescription = \"child lifecycle fixture\"\ninstructions = \"child fixture\"\nmodel = \"fixture-model\"\nmodel_provider = \"custom\"\nbase_url = \"{}\"\nenv_key = \"TEST_AGENT_KEY\"\nwire_api = \"responses\"\n\n[mcp_servers.fixture]\ntype = \"stdio\"\ncommand = \"{command}\"\nargs = [{}]\n",
             provider.base_url(),
-            helper.display(),
-            log.display(),
+            args.join(", "),
         )
     };
     std::fs::write(agents.join("alpha.toml"), definition("alpha", "serve")).unwrap();

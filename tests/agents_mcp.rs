@@ -95,14 +95,14 @@ impl ChildFixture {
 
     /// (command, args) suitable for an agent's stdio child MCP config.
     fn argv(&self, delay_ms: u64) -> (String, Vec<String>) {
-        (
-            "python3".to_string(),
-            vec![
-                self.script.display().to_string(),
-                self.log.display().to_string(),
-                delay_ms.to_string(),
-            ],
-        )
+        let mut invocation = mcp_client::python_invocation();
+        let command = invocation.remove(0);
+        invocation.extend([
+            self.script.display().to_string(),
+            self.log.display().to_string(),
+            delay_ms.to_string(),
+        ]);
+        (command, invocation)
     }
 }
 

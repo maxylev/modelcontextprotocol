@@ -142,6 +142,24 @@ pub fn child_log(path: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Locate a Python interpreter usable for the stdio child-MCP fixtures.
+/// Prefers `python3`; falls back to `python` and `py -3` because the GitHub
+/// Actions Windows runners do not put `python3` on PATH. Returns the argv
+/// prefix (command plus any fixed arguments such as `py -3`).
+pub fn python_invocation() -> Vec<String> {
+    const CANDIDATES: &[&[&str]] = &[&["python3"], &["python"], &["py", "-3"]];
+    for candidate in CANDIDATES {
+        let probe = std::process::Command::new(candidate[0])
+            .args(&candidate[1..])
+            .arg("--version")
+            .output();
+        if probe.map(|out| out.status.success()).unwrap_or(false) {
+            return candidate.iter().map(|s| s.to_string()).collect();
+        }
+    }
+    panic!("no Python interpreter (python3/python/py) found for child MCP fixtures")
+}
+
 /// Wait until the requested number of lines are present in the child log.
 pub async fn child_log_expect(path: &Path, expected: usize) -> Vec<String> {
     tokio::time::timeout(Duration::from_secs(5), async {
