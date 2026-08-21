@@ -1033,17 +1033,38 @@ mod tests {
         );
         assert_eq!(summary, "Running cargo clippy");
 
+        // Absolute in-workspace paths are summarized relative to the workspace
+        // root. `/workspace` (POSIX) is not an absolute path on Windows, so the
+        // workspace root is built with the platform's separators.
+        let workspace_root = if cfg!(windows) {
+            r"C:\workspace".to_string()
+        } else {
+            "/workspace".to_string()
+        };
+        let workspace = Path::new(&workspace_root);
+        let inside = |relative: &str| {
+            if cfg!(windows) {
+                format!(r"C:\workspace\{}", relative.replace('/', "\\"))
+            } else {
+                format!("/workspace/{relative}")
+            }
+        };
         for (tool, expected) in [
             ("filesystem__read_text_file", "Reading src/main.rs"),
             ("filesystem.write_file", "Writing src/main.rs"),
             ("filesystem__search_files", "Searching src/main.rs"),
         ] {
             let (summary, _, target) =
-                safe_tool_activity(tool, &json!({"path":"/workspace/src/main.rs"}), workspace);
+                safe_tool_activity(tool, &json!({"path": inside("src/main.rs")}), workspace);
             assert_eq!(summary, expected);
             assert_eq!(target.as_deref(), Some("src/main.rs"));
         }
-        for path in ["/outside/secret", "../secret", "/workspace/../secret"] {
+        let outside = if cfg!(windows) {
+            r"C:\outside\secret"
+        } else {
+            "/outside/secret"
+        };
+        for path in [outside, "../secret", &format!("{workspace_root}/../secret")] {
             let (summary, _, target) =
                 safe_tool_activity("read_file", &json!({"path":path}), workspace);
             assert_eq!(summary, "Calling read_file");
