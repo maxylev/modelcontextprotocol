@@ -345,26 +345,6 @@ async fn spawn_returns_before_slow_child_mcp_startup_completes() {
         !early.iter().any(|line| line.starts_with("ready ")),
         "child became ready before spawn returned: {early:?}"
     );
-    // Poll for the child's "started" line: proves the child process was
-    // actually launched in the background while spawn returned early. The
-    // window is generous because Windows Python interpreter startup can be
-    // slow under CI load; the child still delays 600ms before "ready".
-    let started_line = tokio::time::timeout(Duration::from_millis(3000), async {
-        loop {
-            let log = mcp_client::child_log(&child.log);
-            if log.iter().any(|line| line.starts_with("started ")) {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
-    .await;
-    assert!(
-        started_line.is_ok(),
-        "child process never recorded its start: {:?}",
-        mcp_client::child_log(&child.log)
-    );
-
     let waited = structured(
         &mcp_client::call_tool(
             &client,

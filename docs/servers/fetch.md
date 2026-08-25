@@ -16,11 +16,11 @@ user-initiated prompt.
 
 ## Server options
 
-| Option                      | Description                                                 |
-| --------------------------- | ----------------------------------------------------------- |
-| `--respect-robots-txt`      | Enforce robots.txt rules for the `fetch` tool        |
-| `--user-agent <USER_AGENT>` | Custom User-Agent for all requests                   |
-| `--proxy-url <URL>`         | Route all requests through this HTTP(S) proxy        |
+| Option                      | Description                                   |
+| --------------------------- | --------------------------------------------- |
+| `--respect-robots-txt`      | Enforce robots.txt rules for the `fetch` tool |
+| `--user-agent <USER_AGENT>` | Custom User-Agent for all requests            |
+| `--proxy-url <URL>`         | Route all requests through this HTTP(S) proxy |
 
 Default User-Agent (unless overridden):
 

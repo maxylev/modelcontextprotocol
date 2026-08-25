@@ -3,14 +3,14 @@
 `modelcontextprotocol` is a single Rust binary that provides six Model
 Context Protocol (MCP) servers over stdio:
 
-| Server       | Identity         | What it does                                                        |
-| ------------ | ---------------- | ------------------------------------------------------------------- |
-| `filesystem` | `mcp-filesystem` | Secure read/write access restricted to allowed directories          |
+| Server       | Identity         | What it does                                                          |
+| ------------ | ---------------- | --------------------------------------------------------------------- |
+| `filesystem` | `mcp-filesystem` | Secure read/write access restricted to allowed directories            |
 | `fetch`      | `mcp-fetch`      | Fetch URLs, convert HTML to markdown, optional robots.txt enforcement |
-| `memory`     | `mcp-memory`     | Persistent knowledge-graph memory as JSONL                          |
-| `shell`      | `mcp-shell`      | Execute local programs directly with a restricted working directory |
-| `skills`     | `mcp-skills`     | Discover and progressively load workspace skill instructions        |
-| `agents`     | `mcp-agents`     | Run configured workspace subagents through external providers       |
+| `memory`     | `mcp-memory`     | Persistent knowledge-graph memory as JSONL                            |
+| `shell`      | `mcp-shell`      | Execute local programs directly with a restricted working directory   |
+| `skills`     | `mcp-skills`     | Discover and progressively load workspace skill instructions          |
+| `agents`     | `mcp-agents`     | Run configured workspace subagents through external providers         |
 
 All six implement the MCP `2026-07-28` specification (see
 [Protocol](/protocol)).

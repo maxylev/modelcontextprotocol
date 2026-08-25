@@ -23,14 +23,14 @@ modelcontextprotocol --agents [DIR]
 `shell` accept one or more allowed directories. All four default to the MCP
 server process's current directory when no directory is supplied.
 
-| Server       | Identity         | Server-specific options                                         |
-| ------------ | ---------------- | --------------------------------------------------------------- |
-| `filesystem` | `mcp-filesystem` | none                                                            |
+| Server       | Identity         | Server-specific options                                          |
+| ------------ | ---------------- | ---------------------------------------------------------------- |
+| `filesystem` | `mcp-filesystem` | none                                                             |
 | `fetch`      | `mcp-fetch`      | `--respect-robots-txt`, `--user-agent <UA>`, `--proxy-url <URL>` |
-| `memory`     | `mcp-memory`     | `--memory-file <PATH>`                                          |
-| `shell`      | `mcp-shell`      | none                                                            |
-| `skills`     | `mcp-skills`     | none                                                            |
-| `agents`     | `mcp-agents`     | none                                                            |
+| `memory`     | `mcp-memory`     | `--memory-file <PATH>`                                           |
+| `shell`      | `mcp-shell`      | none                                                             |
+| `skills`     | `mcp-skills`     | none                                                             |
+| `agents`     | `mcp-agents`     | none                                                             |
 
 ## Selection and validation
 
