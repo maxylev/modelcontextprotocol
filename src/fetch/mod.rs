@@ -18,10 +18,7 @@ use serde::Deserialize;
 use crate::cli::FetchOptions;
 use crate::support::{SPEC_VERSION, tool_error};
 
-use self::http::{
-    DEFAULT_USER_AGENT_AUTONOMOUS, DEFAULT_USER_AGENT_MANUAL, FetchClient, check_may_fetch,
-    fetch_url, truncate,
-};
+use self::http::{DEFAULT_USER_AGENT, FetchClient, check_may_fetch, fetch_url, truncate};
 
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[schemars(description = "Parameters for fetching a URL")]
@@ -55,25 +52,18 @@ pub struct FetchPromptArgs {
 
 pub struct FetchServer {
     client: Arc<FetchClient>,
-    user_agent_autonomous: String,
-    user_agent_manual: String,
-    ignore_robots_txt: bool,
+    user_agent: String,
+    respect_robots_txt: bool,
     tool_router: ToolRouter<FetchServer>,
     prompt_router: PromptRouter<FetchServer>,
 }
 
 impl FetchServer {
-    pub fn new(
-        client: FetchClient,
-        user_agent_autonomous: String,
-        user_agent_manual: String,
-        ignore_robots_txt: bool,
-    ) -> Self {
+    pub fn new(client: FetchClient, user_agent: String, respect_robots_txt: bool) -> Self {
         Self {
             client: Arc::new(client),
-            user_agent_autonomous,
-            user_agent_manual,
-            ignore_robots_txt,
+            user_agent,
+            respect_robots_txt,
             tool_router: Self::tool_router(),
             prompt_router: Self::prompt_router(),
         }
@@ -119,14 +109,14 @@ impl FetchServer {
             )));
         }
 
-        if !self.ignore_robots_txt
-            && let Err(e) = check_may_fetch(&self.client, &url, &self.user_agent_autonomous).await
+        if self.respect_robots_txt
+            && let Err(e) = check_may_fetch(&self.client, &url, &self.user_agent).await
         {
             return Ok(tool_error(e));
         }
 
         let (content, prefix) =
-            match fetch_url(&self.client, &url, &self.user_agent_autonomous, args.raw).await {
+            match fetch_url(&self.client, &url, &self.user_agent, args.raw).await {
                 Ok(result) => result,
                 Err(e) => return Ok(tool_error(e)),
             };
@@ -156,9 +146,8 @@ impl FetchServer {
             return Err(McpError::invalid_params("URL is required", None));
         }
         let url = args.url;
-        // User-initiated fetches skip the robots.txt check and use the manual
-        // user agent, mirroring the reference server.
-        match fetch_url(&self.client, &url, &self.user_agent_manual, false).await {
+        // User-initiated fetches always skip the robots.txt check.
+        match fetch_url(&self.client, &url, &self.user_agent, false).await {
             Ok((content, prefix)) => Ok(GetPromptResult::new(vec![PromptMessage::new_text(
                 Role::User,
                 format!("{prefix}{content}"),
@@ -201,8 +190,9 @@ impl ServerHandler for FetchServer {
         .with_server_info(Implementation::new("mcp-fetch", env!("CARGO_PKG_VERSION")))
         .with_instructions(
             "This server fetches web content and converts HTML pages to markdown. \
-                 The fetch tool obeys robots.txt unless the server was started with \
-                 --ignore-robots-txt. The fetch prompt fetches without checking robots.txt.",
+                 The fetch tool ignores robots.txt by default; start the server with \
+                 --respect-robots-txt to enforce it. The fetch prompt always fetches without \
+                 checking robots.txt.",
         )
     }
 }
@@ -212,22 +202,12 @@ pub async fn run(options: FetchOptions) -> anyhow::Result<()> {
     use rmcp::ServiceExt;
     use rmcp::transport::stdio;
 
-    let user_agent_autonomous = options
+    let user_agent = options
         .user_agent
-        .clone()
-        .unwrap_or_else(|| DEFAULT_USER_AGENT_AUTONOMOUS.to_string());
-    let user_agent_manual = options
-        .user_agent
-        .clone()
-        .unwrap_or_else(|| DEFAULT_USER_AGENT_MANUAL.to_string());
+        .unwrap_or_else(|| DEFAULT_USER_AGENT.to_string());
 
     let client = FetchClient::new(options.proxy_url.as_deref()).map_err(|e| anyhow::anyhow!(e))?;
-    let server = FetchServer::new(
-        client,
-        user_agent_autonomous,
-        user_agent_manual,
-        options.ignore_robots_txt,
-    );
+    let server = FetchServer::new(client, user_agent, options.respect_robots_txt);
 
     let service = server
         .serve(stdio())

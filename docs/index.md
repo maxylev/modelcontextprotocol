@@ -18,7 +18,7 @@ features:
     details: 'Secure read/write access to a set of allowed directories: read, write, edit, search, tree listings, file info, and more, with path and symlink protection.'
     link: /servers/filesystem
   - title: Fetch server
-    details: 'Fetches URLs and converts HTML pages to markdown for the model, with robots.txt enforcement, truncation pagination, and a user-initiated fetch prompt.'
+    details: 'Fetches URLs and converts HTML pages to markdown for the model, with optional robots.txt enforcement, truncation pagination, and a user-initiated fetch prompt.'
     link: /servers/fetch
   - title: Memory server
     details: 'Persistent knowledge-graph memory (entities, relations, observations) stored as JSONL, exposed through tools, a resource, and live subscriptions.'

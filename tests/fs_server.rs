@@ -413,10 +413,10 @@ async fn fetch_options_with_unrelated_servers_are_rejected() {
         vec![
             "--shell",
             dir.path().to_str().unwrap(),
-            "--ignore-robots-txt",
+            "--respect-robots-txt",
         ],
         vec![
-            "--ignore-robots-txt",
+            "--respect-robots-txt",
             "filesystem",
             dir.path().to_str().unwrap(),
         ],

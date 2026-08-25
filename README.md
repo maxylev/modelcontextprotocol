@@ -10,7 +10,7 @@ over stdio:
 | Server       | Identity         | What it does                                                                   |
 | ------------ | ---------------- | ------------------------------------------------------------------------------ |
 | `filesystem` | `mcp-filesystem` | Secure read/write access restricted to allowed directories                     |
-| `fetch`      | `mcp-fetch`      | Fetch URLs, convert HTML to markdown, robots.txt enforcement                   |
+| `fetch`      | `mcp-fetch`      | Fetch URLs and convert HTML to markdown, with optional robots.txt enforcement  |
 | `memory`     | `mcp-memory`     | Persistent knowledge-graph memory (entities, relations, observations) as JSONL |
 | `shell`      | `mcp-shell`      | Execute local programs directly with a restricted working directory            |
 | `skills`     | `mcp-skills`     | Discover and progressively load workspace skill instructions                    |
@@ -174,7 +174,7 @@ binary fits any MCP client. Subcommand form (recommended):
     },
     "fetch": {
       "command": "modelcontextprotocol",
-      "args": ["fetch", "--ignore-robots-txt", "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"]
+      "args": ["fetch"]
     },
     "memory": {
       "command": "modelcontextprotocol",

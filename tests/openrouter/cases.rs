@@ -1023,7 +1023,7 @@ fn fetch_cases() -> Vec<Case> {
             server: ServerId::Fetch,
             tool: "fetch",
             args: serde_json::json!({ "url": "{base}/echo-ua", "raw": true }),
-            oracle: Oracle::TextContains(&["ModelContextProtocol/1.0 (Autonomous"]),
+            oracle: Oracle::TextContains(&["Mozilla/5.0 (Windows NT 10.0; Win64; x64)"]),
             respawn: false,
             group: 0,
             fetch_mode: FetchFixtureMode::Plain,

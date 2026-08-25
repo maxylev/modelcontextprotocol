@@ -2,10 +2,8 @@ use std::time::Duration;
 
 use url::Url;
 
-pub const DEFAULT_USER_AGENT_AUTONOMOUS: &str =
-    "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)";
-pub const DEFAULT_USER_AGENT_MANUAL: &str =
-    "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)";
+pub const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36";
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 

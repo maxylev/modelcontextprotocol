@@ -45,7 +45,7 @@ modelcontextprotocol --version
 modelcontextprotocol --help
 
 # Invalid combinations are rejected loudly
-modelcontextprotocol filesystem /tmp --ignore-robots-txt   # exits 1
+modelcontextprotocol filesystem /tmp --respect-robots-txt  # exits 1
 modelcontextprotocol fetch --memory-file /tmp/x.jsonl      # exits 1
 modelcontextprotocol skills /tmp --memory-file /tmp/x.jsonl # exits 1
 ```

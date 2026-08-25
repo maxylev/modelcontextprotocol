@@ -1,15 +1,15 @@
 # Fetch server
 
-Fetches URLs and converts HTML pages to markdown for the model, mirroring
-the reference `mcp-server-fetch` server.
+Fetches URLs and converts HTML pages to markdown for the model with a tool and
+user-initiated prompt.
 
 - **Identity:** `mcp-fetch` (crate version)
 - **Capabilities:** tools, prompts
 - **Invocation:** `modelcontextprotocol fetch` or
   `modelcontextprotocol --fetch`
-- **Instructions published to clients:** the fetch tool obeys robots.txt
-  unless the server was started with `--ignore-robots-txt`; the fetch
-  prompt fetches without checking robots.txt
+- **Instructions published to clients:** the fetch tool ignores robots.txt by
+  default and obeys it when started with `--respect-robots-txt`; the fetch
+  prompt always fetches without checking robots.txt
 
 > **Security:** the fetch server can reach local and internal IP addresses;
 > there is no SSRF protection. See [Security model](/security).
@@ -18,19 +18,17 @@ the reference `mcp-server-fetch` server.
 
 | Option                      | Description                                                 |
 | --------------------------- | ----------------------------------------------------------- |
-| `--ignore-robots-txt`       | Skip robots.txt checks for the `fetch` tool                 |
-| `--user-agent <USER_AGENT>` | Custom User-Agent for all requests, replacing both defaults |
-| `--proxy-url <URL>`         | Route all requests through this HTTP(S) proxy               |
+| `--respect-robots-txt`      | Enforce robots.txt rules for the `fetch` tool        |
+| `--user-agent <USER_AGENT>` | Custom User-Agent for all requests                   |
+| `--proxy-url <URL>`         | Route all requests through this HTTP(S) proxy        |
 
-Default user agents (unless overridden):
+Default User-Agent (unless overridden):
 
 ```
-ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)
-ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
 ```
 
-The autonomous agent is used by the `fetch` tool; the user-specified agent
-by the `fetch` prompt.
+The same User-Agent is used by the `fetch` tool and prompt.
 
 ## Tool: fetch
 
@@ -81,10 +79,10 @@ get more content.</error>` — and `start_index` beyond the end returns
   `<error>No more content available.</error>`.
 - **HTTP status ≥ 400** surfaces as a tool error ("Failed to fetch ... -
   status code 404").
-- **robots.txt** is consulted before fetching (unless
-  `--ignore-robots-txt`): unreachable → blocked; 401/403 → blocked; other
-  4xx → allowed; a disallow rule matching the autonomous user agent →
-  blocked with guidance to try the fetch prompt.
+- **robots.txt** is ignored by default. With `--respect-robots-txt`, it is
+  consulted before fetching: unreachable → blocked; 401/403 → blocked; other
+  4xx → allowed; a matching disallow rule → blocked with guidance to try the
+  fetch prompt.
 - Every request has a **30-second timeout**.
 
 ## Prompt: fetch

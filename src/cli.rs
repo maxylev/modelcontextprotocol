@@ -99,9 +99,9 @@ pub enum Command {
 
 #[derive(Debug, Clone, Default, PartialEq, Args)]
 pub struct FetchOptions {
-    /// Ignore robots.txt restrictions when fetching on behalf of the model.
+    /// Respect robots.txt restrictions when fetching on behalf of the model.
     #[arg(long)]
-    pub ignore_robots_txt: bool,
+    pub respect_robots_txt: bool,
 
     /// Custom User-Agent header used for all requests.
     #[arg(long, value_name = "USER_AGENT")]
@@ -117,7 +117,7 @@ impl Cli {
     ///
     /// Exactly one server selector (subcommand or top-level flag) must be
     /// present, and server-specific options may only be combined with the
-    /// server they belong to. Anything else — e.g. `--ignore-robots-txt`
+    /// server they belong to. Anything else — e.g. `--respect-robots-txt`
     /// with `filesystem`, or `--memory-file` with `fetch` — returns `None`
     /// so the caller can fail loudly instead of silently ignoring options.
     pub fn into_command(self) -> Option<Command> {
@@ -193,14 +193,14 @@ pub fn print_usage() {
          options must belong to the selected server.\n\n\
          Usage:\n  \
          modelcontextprotocol filesystem [DIR ...]\n  \
-         modelcontextprotocol fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]\n  \
+         modelcontextprotocol fetch [--respect-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]\n  \
          modelcontextprotocol memory [--memory-file <PATH>]\n  \
          modelcontextprotocol shell [DIR ...]\n\n\
          modelcontextprotocol skills [DIR]\n  \
          modelcontextprotocol agents [DIR]\n\n\
          Equivalent flag forms:\n  \
          modelcontextprotocol --filesystem [DIR ...]\n  \
-         modelcontextprotocol --fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]\n  \
+         modelcontextprotocol --fetch [--respect-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]\n  \
          modelcontextprotocol --memory [--memory-file <PATH>]\n  \
          modelcontextprotocol --shell [DIR ...]\n  \
          modelcontextprotocol --skills [DIR]\n  \

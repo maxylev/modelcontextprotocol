@@ -5,14 +5,14 @@ either equivalent form; there is no configuration-file option.
 
 ```text
 modelcontextprotocol filesystem [DIR ...]
-modelcontextprotocol fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]
+modelcontextprotocol fetch [--respect-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]
 modelcontextprotocol memory [--memory-file <PATH>]
 modelcontextprotocol shell [DIR ...]
 modelcontextprotocol skills [DIR]
 modelcontextprotocol agents [DIR]
 
 modelcontextprotocol --filesystem [DIR ...]
-modelcontextprotocol --fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]
+modelcontextprotocol --fetch [--respect-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]
 modelcontextprotocol --memory [--memory-file <PATH>]
 modelcontextprotocol --shell [DIR ...]
 modelcontextprotocol --skills [DIR]
@@ -26,7 +26,7 @@ server process's current directory when no directory is supplied.
 | Server       | Identity         | Server-specific options                                         |
 | ------------ | ---------------- | --------------------------------------------------------------- |
 | `filesystem` | `mcp-filesystem` | none                                                            |
-| `fetch`      | `mcp-fetch`      | `--ignore-robots-txt`, `--user-agent <UA>`, `--proxy-url <URL>` |
+| `fetch`      | `mcp-fetch`      | `--respect-robots-txt`, `--user-agent <UA>`, `--proxy-url <URL>` |
 | `memory`     | `mcp-memory`     | `--memory-file <PATH>`                                          |
 | `shell`      | `mcp-shell`      | none                                                            |
 | `skills`     | `mcp-skills`     | none                                                            |

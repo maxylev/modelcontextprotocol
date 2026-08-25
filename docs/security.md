@@ -48,19 +48,17 @@ facts:
 - **Only `http` and `https` schemes are accepted**; anything else is
   rejected before any network I/O.
 - **Every request has a 30-second timeout.**
-- **robots.txt policy** (for the `fetch` tool, mirroring the reference
-  server):
+- **robots.txt policy:** checks are disabled by default. When the server is
+  started with `--respect-robots-txt`:
   - robots.txt unreachable → the fetch is blocked with an error;
   - robots.txt returns 401/403 → blocked (assumed not allowed);
   - any other 4xx (for example 404) → allowed;
-  - otherwise the robots.txt is parsed and matched against the autonomous
-    user agent; a disallow rule blocks the fetch.
-  - `--ignore-robots-txt` disables these checks for the tool.
+  - otherwise robots.txt is parsed and matched against the configured user
+    agent; a disallow rule blocks the fetch.
   - The `fetch` **prompt** never checks robots.txt: it is user-initiated
-    and uses the "User-Specified" user agent instead.
-- Default user agents (customizable with `--user-agent`):
-  - autonomous (tool): `ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)`
-  - manual (prompt): `ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)`
+    regardless of this option.
+- Default User-Agent for tool and prompt requests (customizable with
+  `--user-agent`): `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36`
 - Response bodies are decoded as text (charset-aware); HTML is simplified
   to markdown with `style`, `script`, `noscript`, and `template` content
   suppressed rather than leaked into model output.

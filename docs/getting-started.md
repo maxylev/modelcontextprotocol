@@ -6,7 +6,7 @@ Context Protocol (MCP) servers over stdio:
 | Server       | Identity         | What it does                                                        |
 | ------------ | ---------------- | ------------------------------------------------------------------- |
 | `filesystem` | `mcp-filesystem` | Secure read/write access restricted to allowed directories          |
-| `fetch`      | `mcp-fetch`      | Fetch URLs, convert HTML to markdown, robots.txt enforcement        |
+| `fetch`      | `mcp-fetch`      | Fetch URLs, convert HTML to markdown, optional robots.txt enforcement |
 | `memory`     | `mcp-memory`     | Persistent knowledge-graph memory as JSONL                          |
 | `shell`      | `mcp-shell`      | Execute local programs directly with a restricted working directory |
 | `skills`     | `mcp-skills`     | Discover and progressively load workspace skill instructions        |

@@ -24,6 +24,8 @@ const PAGE_HTML: &str = "<!DOCTYPE html><html><head><title>Test Page</title></he
 <body><article><h1>Hello World</h1><p>This is a test paragraph.</p></article></body></html>";
 
 const BIG_BODY: &str = "The quick brown fox jumps over the lazy dog. ";
+const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36";
 
 /// Mirror of the production raw-response safety limit
 /// (`src/fetch/http.rs::MAX_RESPONSE_BODY_BYTES`, 8 MiB).
@@ -444,7 +446,7 @@ async fn fetch_error_statuses_fail() {
 #[tokio::test]
 async fn robots_txt_disallow_blocks_fetch() {
     let server = TestServer::start(RobotsMode::DisallowAll);
-    let client = connect_fetch(&[]).await;
+    let client = connect_fetch(&["--respect-robots-txt"]).await;
     run_test(async move {
         let result = call_tool(
             &client,
@@ -463,7 +465,7 @@ async fn robots_txt_disallow_blocks_fetch() {
 #[tokio::test]
 async fn robots_txt_allow_permits_fetch() {
     let server = TestServer::start(RobotsMode::AllowAll);
-    let client = connect_fetch(&[]).await;
+    let client = connect_fetch(&["--respect-robots-txt"]).await;
     run_test(async move {
         let result = call_tool(
             &client,
@@ -479,7 +481,7 @@ async fn robots_txt_allow_permits_fetch() {
 #[tokio::test]
 async fn robots_txt_missing_permits_fetch() {
     let server = TestServer::start(RobotsMode::Missing);
-    let client = connect_fetch(&[]).await;
+    let client = connect_fetch(&["--respect-robots-txt"]).await;
     run_test(async move {
         let result = call_tool(
             &client,
@@ -495,7 +497,7 @@ async fn robots_txt_missing_permits_fetch() {
 #[tokio::test]
 async fn robots_txt_401_and_403_block_fetch() {
     let server = TestServer::start(RobotsMode::Unauthorized);
-    let client = connect_fetch(&[]).await;
+    let client = connect_fetch(&["--respect-robots-txt"]).await;
     run_test(async move {
         let result = call_tool(
             &client,
@@ -513,7 +515,7 @@ async fn robots_txt_401_and_403_block_fetch() {
     .await;
 
     let server2 = TestServer::start(RobotsMode::Forbidden);
-    let client2 = connect_fetch(&[]).await;
+    let client2 = connect_fetch(&["--respect-robots-txt"]).await;
     run_test(async move {
         let result = call_tool(
             &client2,
@@ -536,7 +538,7 @@ async fn robots_txt_server_error_falls_through_to_parsing() {
     // A 500 from robots.txt is not a 4xx: the reference server parses the
     // body anyway, which contains no rules, so fetching is allowed.
     let server = TestServer::start(RobotsMode::ServerError);
-    let client = connect_fetch(&[]).await;
+    let client = connect_fetch(&["--respect-robots-txt"]).await;
     run_test(async move {
         let result = call_tool(
             &client,
@@ -550,9 +552,9 @@ async fn robots_txt_server_error_falls_through_to_parsing() {
 }
 
 #[tokio::test]
-async fn ignore_robots_txt_flag_skips_checks() {
+async fn robots_txt_is_ignored_by_default() {
     let server = TestServer::start(RobotsMode::DisallowAll);
-    let client = connect_fetch(&["--ignore-robots-txt"]).await;
+    let client = connect_fetch(&[]).await;
     run_test(async move {
         let result = call_tool(
             &client,
@@ -897,11 +899,10 @@ async fn custom_user_agent_is_used() {
 }
 
 #[tokio::test]
-async fn default_user_agents_are_used() {
+async fn default_browser_user_agent_is_used() {
     let server = TestServer::start(RobotsMode::Missing);
     let client = connect_fetch(&[]).await;
     run_test(async move {
-        // Tool calls use the autonomous user agent.
         let result = call_tool(
             &client,
             "fetch",
@@ -909,12 +910,7 @@ async fn default_user_agents_are_used() {
         )
         .await;
         let content = text(&result);
-        assert!(
-            content.contains("ModelContextProtocol/1.0 (Autonomous;"),
-            "got: {content}"
-        );
-        // The raw response echoes exactly the UA used for the page request.
-        assert!(!content.contains("User-Specified"), "got: {content}");
+        assert!(content.contains(DEFAULT_USER_AGENT), "got: {content}");
     })
     .await;
 }
@@ -986,7 +982,7 @@ async fn prompts_skip_robots_txt() {
 }
 
 #[tokio::test]
-async fn prompts_use_manual_user_agent() {
+async fn prompts_use_default_browser_user_agent() {
     let server = TestServer::start(RobotsMode::Missing);
     let client = connect_fetch(&[]).await;
     run_test(async move {
@@ -1003,10 +999,7 @@ async fn prompts_use_manual_user_agent() {
             .await
             .expect("get prompt");
         let content = prompt_text(&result);
-        assert!(
-            content.contains("ModelContextProtocol/1.0 (User-Specified;"),
-            "got: {content}"
-        );
+        assert!(content.contains(DEFAULT_USER_AGENT), "got: {content}");
     })
     .await;
 }
@@ -1092,12 +1085,12 @@ async fn fetch_flag_form_starts() {
 #[tokio::test]
 async fn fetch_flag_form_honors_fetch_options() {
     // `--fetch` combined with fetch-specific options must apply them, not
-    // silently drop them: with a disallowing robots.txt the ignore flag must
-    // take effect, and the custom user agent must be used for requests.
-    let server = TestServer::start(RobotsMode::DisallowAll);
+    // silently drop them: robots.txt is checked and the custom user agent is
+    // used for requests.
+    let server = TestServer::start(RobotsMode::AllowAll);
     let mut cmd = Command::new(BIN);
     cmd.arg("--fetch")
-        .arg("--ignore-robots-txt")
+        .arg("--respect-robots-txt")
         .arg("--user-agent")
         .arg("FlagFormAgent/2.0");
     let client: Client = ()

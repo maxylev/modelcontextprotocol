@@ -354,7 +354,7 @@ async fn run_memory_phase(client: Arc<OpenRouterClient>, metrics: &Arc<Metrics>)
 async fn run_fetch_phase(client: Arc<OpenRouterClient>, metrics: &Arc<Metrics>) -> Vec<String> {
     let mut failures = Vec::new();
     let cases = cases_for(ServerId::Fetch);
-    let argv = ["fetch"];
+    let argv = ["fetch", "--respect-robots-txt"];
     let (mcp, tools, prompts, resources) =
         match discover_and_list(&argv, "mcp-fetch", true, true, false).await {
             Ok(result) => result,
