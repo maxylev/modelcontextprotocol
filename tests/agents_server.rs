@@ -421,6 +421,29 @@ async fn connect_with_keys(
     .expect("agents server starts")
 }
 
+#[tokio::test]
+async fn omitted_workspace_uses_current_directory() {
+    let provider = ResponsesFixture::start();
+    let workspace = workspace(&provider);
+    let mut command = Command::new(BIN);
+    command
+        .arg("agents")
+        .current_dir(workspace.path())
+        .env("TEST_AGENT_KEY", "fixture-secret-not-to-be-disclosed");
+    let client: Client = ()
+        .serve_with_lifecycle(
+            TokioChildProcess::new(command).expect("spawn agents server"),
+            ClientLifecycleMode::Discover {
+                preferred_versions: vec![rmcp::model::ProtocolVersion::V_2026_07_28],
+            },
+        )
+        .await
+        .expect("agents server starts");
+
+    let tools = client.list_tools(Default::default()).await.unwrap().tools;
+    assert!(tools.iter().any(|tool| tool.name == "spawn_agent"));
+}
+
 async fn connect_with_progress(
     dir: &std::path::Path,
     handler: ProgressClient,
@@ -502,7 +525,6 @@ async fn agents_cli_forms_and_invalid_selection_show_usage() {
     );
 
     for args in [
-        vec!["agents"],
         vec!["agents", ".", "--memory"],
         vec!["--agents", ".", "--fetch"],
     ] {

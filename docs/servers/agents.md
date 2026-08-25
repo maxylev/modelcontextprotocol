@@ -1,6 +1,7 @@
 # Agents server
 
-`modelcontextprotocol agents <DIR>` starts `mcp-agents` for one workspace.
+`modelcontextprotocol agents [DIR]` starts `mcp-agents` for one workspace.
+When `DIR` is omitted, the workspace is the process's current directory.
 It discovers local agent definitions, calls an external model provider, and
 can expose configured child MCP tools to that provider. It is intended only
 for trusted workspaces.

@@ -1,6 +1,7 @@
 # Skills server
 
-`modelcontextprotocol skills <DIR>` starts `mcp-skills` for one workspace.
+`modelcontextprotocol skills [DIR]` starts `mcp-skills` for one workspace.
+When `DIR` is omitted, the workspace is the process's current directory.
 It discovers reusable repository instructions and exposes one tool when at
 least one valid skill is available.
 

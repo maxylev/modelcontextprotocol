@@ -57,6 +57,37 @@ async fn connect_skills(workspace: &Path) -> Client {
     .expect("skills server starts")
 }
 
+#[tokio::test]
+async fn omitted_workspace_uses_current_directory() {
+    let workspace = tmpdir();
+    write_skill(
+        workspace.path(),
+        ".agents/skills",
+        "demo",
+        "demo",
+        "Demo skill",
+        "Use the demo.\n",
+    );
+    let mut command = Command::new(BIN);
+    command.arg("skills").current_dir(workspace.path());
+    let client: Client = ()
+        .serve_with_lifecycle(
+            TokioChildProcess::new(command).expect("spawn skills server"),
+            ClientLifecycleMode::Discover {
+                preferred_versions: vec![ProtocolVersion::V_2026_07_28],
+            },
+        )
+        .await
+        .expect("skills server starts");
+
+    let tools = client.list_tools(Default::default()).await.unwrap().tools;
+    let activate = tools
+        .iter()
+        .find(|tool| tool.name == "activate_skill")
+        .expect("workspace skill tool is available");
+    assert!(activate.description.as_deref().unwrap().contains("demo"));
+}
+
 async fn within_timeout(future: impl std::future::Future<Output = ()>) {
     tokio::time::timeout(REQUEST_TIMEOUT, future)
         .await
@@ -161,8 +192,8 @@ async fn cli_rejects_missing_or_invalid_workspaces_and_conflicting_options() {
         assert!(!stderr.is_empty(), "failure is explained for {args:?}");
     }
     let usage = cli_failure(&[]).await;
-    assert!(usage.contains("skills <DIR>"), "usage: {usage}");
-    assert!(usage.contains("agents <DIR>"), "usage: {usage}");
+    assert!(usage.contains("skills [DIR]"), "usage: {usage}");
+    assert!(usage.contains("agents [DIR]"), "usage: {usage}");
 }
 
 #[tokio::test]

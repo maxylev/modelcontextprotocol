@@ -6,9 +6,9 @@ restricted to configured allowed directories.
 
 - **Identity:** `mcp-shell` (crate version)
 - **Capabilities:** tools
-- **Invocation:** `modelcontextprotocol shell <DIR> [DIR ...]` or
-  `modelcontextprotocol --shell <DIR> [DIR ...]` — at least one directory
-  is required
+- **Invocation:** `modelcontextprotocol shell [DIR ...]` or
+  `modelcontextprotocol --shell [DIR ...]` — defaults to the process's current
+  directory when no directory is supplied
 
 > **Security warning:** this server grants arbitrary local command
 > execution with the permissions of the MCP server process. The `cwd`

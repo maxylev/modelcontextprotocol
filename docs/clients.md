@@ -1,8 +1,9 @@
 # Adding the servers to your MCP client
 
 All six servers use the one `modelcontextprotocol` binary over stdio. Use a
-separate entry per server; `skills` and `agents` both receive the trusted
-workspace path. The examples use `~/Developer/my-project`.
+separate entry per server. The examples use explicit workspace paths, but the
+path can be omitted for `filesystem`, `shell`, `skills`, and `agents` when the
+client launches MCP server processes in the intended workspace directory.
 
 ## Shared JSON shape
 

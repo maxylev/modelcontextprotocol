@@ -14,9 +14,9 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
 
-    /// Start the filesystem server with these allowed directories
-    /// (equivalent to `filesystem <DIR>...`).
-    #[arg(long, value_name = "DIR", num_args = 1..)]
+    /// Start the filesystem server with these allowed directories, defaulting
+    /// to the current directory (equivalent to `filesystem [DIR]...`).
+    #[arg(long, value_name = "DIR", num_args = 0.., default_missing_value = ".")]
     pub filesystem: Option<Vec<PathBuf>>,
 
     /// Start the fetch server (equivalent to `fetch`).
@@ -27,17 +27,17 @@ pub struct Cli {
     #[arg(long)]
     pub memory: bool,
 
-    /// Start the shell server with these allowed directories
-    /// (equivalent to `shell <DIR>...`).
-    #[arg(long, value_name = "DIR", num_args = 1..)]
+    /// Start the shell server with these allowed directories, defaulting to
+    /// the current directory (equivalent to `shell [DIR]...`).
+    #[arg(long, value_name = "DIR", num_args = 0.., default_missing_value = ".")]
     pub shell: Option<Vec<PathBuf>>,
 
-    /// Start the skills server for this workspace (equivalent to `skills <DIR>`).
-    #[arg(long, value_name = "DIR")]
+    /// Start the skills server for a workspace, defaulting to the current directory.
+    #[arg(long, value_name = "DIR", num_args = 0..=1, default_missing_value = ".")]
     pub skills: Option<PathBuf>,
 
-    /// Start the agents server for this workspace (equivalent to `agents <DIR>`).
-    #[arg(long, value_name = "DIR")]
+    /// Start the agents server for a workspace, defaulting to the current directory.
+    #[arg(long, value_name = "DIR", num_args = 0..=1, default_missing_value = ".")]
     pub agents: Option<PathBuf>,
 
     /// Memory file location (JSONL), used by the memory server.
@@ -53,10 +53,10 @@ pub enum Command {
     /// Start the filesystem MCP server.
     ///
     /// All file operations are restricted to the directories passed as
-    /// arguments. At least one directory is required.
+    /// arguments, or to the current directory when none are passed.
     Filesystem {
         /// Directories the server is allowed to read and write.
-        #[arg(value_name = "DIR", required = true, num_args = 1..)]
+        #[arg(value_name = "DIR", num_args = 0.., default_value = ".")]
         dirs: Vec<PathBuf>,
     },
     /// Start the fetch MCP server.
@@ -76,23 +76,23 @@ pub enum Command {
     ///
     /// Executes local programs directly (no shell) with the OS permissions of
     /// the MCP server process. The working directory of every command is
-    /// restricted to the directories passed as arguments. At least one
-    /// directory is required.
+    /// restricted to the directories passed as arguments, or to the current
+    /// directory when none are passed.
     Shell {
         /// Directories the server allows commands to run in.
-        #[arg(value_name = "DIR", required = true, num_args = 1..)]
+        #[arg(value_name = "DIR", num_args = 0.., default_value = ".")]
         dirs: Vec<PathBuf>,
     },
     /// Start the Agent Skills MCP server for one workspace.
     Skills {
         /// Workspace root containing project-local skill definitions.
-        #[arg(value_name = "DIR")]
+        #[arg(value_name = "DIR", default_value = ".")]
         dir: PathBuf,
     },
     /// Start the local subagents MCP server for one workspace.
     Agents {
         /// Workspace root containing project-local agent definitions.
-        #[arg(value_name = "DIR")]
+        #[arg(value_name = "DIR", default_value = ".")]
         dir: PathBuf,
     },
 }
@@ -192,18 +192,56 @@ pub fn print_usage() {
         "modelcontextprotocol: exactly one server must be selected, and server-specific \
          options must belong to the selected server.\n\n\
          Usage:\n  \
-         modelcontextprotocol filesystem <DIR> [DIR ...]\n  \
+         modelcontextprotocol filesystem [DIR ...]\n  \
          modelcontextprotocol fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]\n  \
          modelcontextprotocol memory [--memory-file <PATH>]\n  \
-         modelcontextprotocol shell <DIR> [DIR ...]\n\n\
-         modelcontextprotocol skills <DIR>\n  \
-         modelcontextprotocol agents <DIR>\n\n\
+         modelcontextprotocol shell [DIR ...]\n\n\
+         modelcontextprotocol skills [DIR]\n  \
+         modelcontextprotocol agents [DIR]\n\n\
          Equivalent flag forms:\n  \
-         modelcontextprotocol --filesystem <DIR> [DIR ...]\n  \
+         modelcontextprotocol --filesystem [DIR ...]\n  \
          modelcontextprotocol --fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]\n  \
          modelcontextprotocol --memory [--memory-file <PATH>]\n  \
-         modelcontextprotocol --shell <DIR> [DIR ...]\n  \
-         modelcontextprotocol --skills <DIR>\n  \
-         modelcontextprotocol --agents <DIR>"
+         modelcontextprotocol --shell [DIR ...]\n  \
+         modelcontextprotocol --skills [DIR]\n  \
+         modelcontextprotocol --agents [DIR]"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Cli, Command};
+    use clap::Parser;
+    use std::path::PathBuf;
+
+    #[test]
+    fn workspace_servers_default_to_current_directory() {
+        for args in [
+            &["modelcontextprotocol", "filesystem"][..],
+            &["modelcontextprotocol", "--filesystem"][..],
+            &["modelcontextprotocol", "shell"][..],
+            &["modelcontextprotocol", "--shell"][..],
+            &["modelcontextprotocol", "skills"][..],
+            &["modelcontextprotocol", "--skills"][..],
+            &["modelcontextprotocol", "agents"][..],
+            &["modelcontextprotocol", "--agents"][..],
+        ] {
+            let command = Cli::try_parse_from(args)
+                .unwrap_or_else(|error| panic!("failed to parse {args:?}: {error}"))
+                .into_command()
+                .unwrap_or_else(|| panic!("failed to select a command for {args:?}"));
+
+            match command {
+                Command::Filesystem { dirs } | Command::Shell { dirs } => {
+                    assert_eq!(dirs, [PathBuf::from(".")]);
+                }
+                Command::Skills { dir } | Command::Agents { dir } => {
+                    assert_eq!(dir, PathBuf::from("."));
+                }
+                Command::Fetch(_) | Command::Memory { .. } => {
+                    panic!("unexpected command for {args:?}");
+                }
+            }
+        }
+    }
 }

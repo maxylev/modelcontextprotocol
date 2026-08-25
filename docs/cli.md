@@ -4,23 +4,24 @@ Invoke the one binary as `modelcontextprotocol`. Select exactly one server in
 either equivalent form; there is no configuration-file option.
 
 ```text
-modelcontextprotocol filesystem <DIR> [DIR ...]
+modelcontextprotocol filesystem [DIR ...]
 modelcontextprotocol fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]
 modelcontextprotocol memory [--memory-file <PATH>]
-modelcontextprotocol shell <DIR> [DIR ...]
-modelcontextprotocol skills <DIR>
-modelcontextprotocol agents <DIR>
+modelcontextprotocol shell [DIR ...]
+modelcontextprotocol skills [DIR]
+modelcontextprotocol agents [DIR]
 
-modelcontextprotocol --filesystem <DIR> [DIR ...]
+modelcontextprotocol --filesystem [DIR ...]
 modelcontextprotocol --fetch [--ignore-robots-txt] [--user-agent <UA>] [--proxy-url <URL>]
 modelcontextprotocol --memory [--memory-file <PATH>]
-modelcontextprotocol --shell <DIR> [DIR ...]
-modelcontextprotocol --skills <DIR>
-modelcontextprotocol --agents <DIR>
+modelcontextprotocol --shell [DIR ...]
+modelcontextprotocol --skills [DIR]
+modelcontextprotocol --agents [DIR]
 ```
 
-`skills` and `agents` each take exactly one positional workspace directory.
-`filesystem` and `shell` each take one or more allowed directories.
+`skills` and `agents` each accept one workspace directory. `filesystem` and
+`shell` accept one or more allowed directories. All four default to the MCP
+server process's current directory when no directory is supplied.
 
 | Server       | Identity         | Server-specific options                                         |
 | ------------ | ---------------- | --------------------------------------------------------------- |
@@ -34,15 +35,16 @@ modelcontextprotocol --agents <DIR>
 ## Selection and validation
 
 Selection is strict: exactly one subcommand or top-level selector must be
-present. Any mixed selectors, missing required directory, or option belonging
-to another server prints usage to stderr and exits 1. For example,
+present. Any mixed selectors or option belonging to another server prints
+usage to stderr and exits 1. For example,
 `fetch --memory`, `skills /workspace --user-agent UA`, and
 `agents /workspace --memory-file memory.jsonl` are rejected. The two workspace
 servers have no options beyond their one positional workspace.
 
 Filesystem and shell roots are expanded, made absolute, and canonicalized;
 unusable roots are warned about and startup fails when none remain. Skills and
-agents canonicalize their one workspace and require it to be a directory.
+agents canonicalize their workspace and require it to be a directory. An
+omitted directory is treated as `.` before this validation.
 
 ## Environment variables
 

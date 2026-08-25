@@ -8,7 +8,8 @@ never expose them over an untrusted network.
 ## Filesystem server: path and symlink controls
 
 All filesystem operations are restricted to the directories passed on the
-command line (`AccessControl` in `src/support/access.rs`).
+command line, or to the process's current directory when none are supplied
+(`AccessControl` in `src/support/access.rs`).
 
 - **Roots are canonicalized at startup.** Each allowed directory is stored
   both as given (lexically normalized) and as canonicalized. This fixes

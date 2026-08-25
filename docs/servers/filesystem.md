@@ -5,9 +5,9 @@ reference `@modelcontextprotocol/server-filesystem` server.
 
 - **Identity:** `mcp-filesystem` (crate version)
 - **Capabilities:** tools
-- **Invocation:** `modelcontextprotocol filesystem <DIR> [DIR ...]` or
-  `modelcontextprotocol --filesystem <DIR> [DIR ...]` — at least one
-  directory is required
+- **Invocation:** `modelcontextprotocol filesystem [DIR ...]` or
+  `modelcontextprotocol --filesystem [DIR ...]` — defaults to the process's
+  current directory when no directory is supplied
 - **Instructions published to clients:** use `list_allowed_directories`
   first to see which directories are accessible
 

@@ -65,18 +65,26 @@ fn join(dir: &Path, name: &str) -> PathBuf {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn startup_without_directories_fails() {
-    let output = Command::new(BIN)
-        .arg("filesystem")
-        .output()
+async fn startup_without_directories_uses_current_directory() {
+    let dir = tmpdir();
+    let expected = dir.path().canonicalize().expect("canonical tempdir");
+    let mut command = Command::new(BIN);
+    command.arg("filesystem").current_dir(dir.path());
+    let client: Client = ()
+        .serve_with_lifecycle(
+            TokioChildProcess::new(command).expect("spawn filesystem server"),
+            rmcp::service::ClientLifecycleMode::Discover {
+                preferred_versions: vec![rmcp::model::ProtocolVersion::V_2026_07_28],
+            },
+        )
         .await
-        .expect("binary runs");
-    assert!(!output.status.success(), "exit code is non-zero");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("filesystem"),
-        "usage mentions filesystem, got: {stderr}"
-    );
+        .expect("filesystem server starts");
+
+    run_test(async move {
+        let result = call_tool(&client, "list_allowed_directories", serde_json::json!({})).await;
+        assert!(text(&result).contains(&expected.display().to_string()));
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -494,17 +502,26 @@ async fn top_level_flags_after_a_subcommand_are_rejected() {
 }
 
 #[tokio::test]
-async fn flag_server_requires_directory_values() {
-    let stderr = expect_cli_failure(&["--filesystem"]).await;
-    assert!(
-        stderr.contains("DIR") || stderr.contains("filesystem"),
-        "clap explains the missing value: {stderr}"
-    );
-    let stderr = expect_cli_failure(&["--shell"]).await;
-    assert!(
-        stderr.contains("DIR") || stderr.contains("shell"),
-        "clap explains the missing value: {stderr}"
-    );
+async fn flag_server_without_directory_uses_current_directory() {
+    let dir = tmpdir();
+    let expected = dir.path().canonicalize().expect("canonical tempdir");
+    let mut command = Command::new(BIN);
+    command.arg("--filesystem").current_dir(dir.path());
+    let client: Client = ()
+        .serve_with_lifecycle(
+            TokioChildProcess::new(command).expect("spawn filesystem server"),
+            rmcp::service::ClientLifecycleMode::Discover {
+                preferred_versions: vec![rmcp::model::ProtocolVersion::V_2026_07_28],
+            },
+        )
+        .await
+        .expect("filesystem server starts");
+
+    run_test(async move {
+        let result = call_tool(&client, "list_allowed_directories", serde_json::json!({})).await;
+        assert!(text(&result).contains(&expected.display().to_string()));
+    })
+    .await;
 }
 
 // ---------------------------------------------------------------------------

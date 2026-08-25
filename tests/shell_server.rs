@@ -161,18 +161,34 @@ async fn shell_starts_through_flag_form() {
 }
 
 #[tokio::test]
-async fn shell_startup_without_directories_fails() {
-    let output = Command::new(BIN)
-        .arg("shell")
-        .output()
+async fn shell_startup_without_directories_uses_current_directory() {
+    let dir = tmpdir();
+    let mut command = Command::new(BIN);
+    command.arg("shell").current_dir(dir.path());
+    let client: Client = ()
+        .serve_with_lifecycle(
+            TokioChildProcess::new(command).expect("spawn shell server"),
+            ClientLifecycleMode::Discover {
+                preferred_versions: vec![rmcp::model::ProtocolVersion::V_2026_07_28],
+            },
+        )
         .await
-        .expect("binary runs");
-    assert!(!output.status.success(), "exit code is non-zero");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("DIR"),
-        "clap explains the missing directory, got: {stderr}"
-    );
+        .expect("shell server starts");
+    let expected = dir.path().canonicalize().expect("canonical tempdir");
+    let (program, args) = helper("cwd", &[]);
+
+    run_test(async move {
+        let result = call_tool(
+            &client,
+            "execute_command",
+            serde_json::json!({ "program": program, "args": args }),
+        )
+        .await;
+        assert_eq!(result.is_error, Some(false));
+        let output = structured(&result);
+        assert_eq!(reported_cwd(output["stdout"].as_str().unwrap()), expected);
+    })
+    .await;
 }
 
 #[tokio::test]

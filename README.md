@@ -166,11 +166,11 @@ binary fits any MCP client. Subcommand form (recommended):
   "mcpServers": {
     "filesystem": {
       "command": "modelcontextprotocol",
-      "args": ["filesystem", "~/Developer/my-project"]
+      "args": ["filesystem"]
     },
     "shell": {
       "command": "modelcontextprotocol",
-      "args": ["shell", "~/Developer/my-project"]
+      "args": ["shell"]
     },
     "fetch": {
       "command": "modelcontextprotocol",
@@ -182,11 +182,11 @@ binary fits any MCP client. Subcommand form (recommended):
     },
     "skills": {
       "command": "modelcontextprotocol",
-      "args": ["skills", "~/Developer/my-project"]
+      "args": ["skills"]
     },
     "agents": {
       "command": "modelcontextprotocol",
-      "args": ["agents", "~/Developer/my-project"],
+      "args": ["agents"],
       "env": {
         "OPENAI_REVIEWER_API_KEY": "${OPENAI_REVIEWER_API_KEY}",
         "ANTHROPIC_RESEARCHER_API_KEY": "${ANTHROPIC_RESEARCHER_API_KEY}"
@@ -196,8 +196,14 @@ binary fits any MCP client. Subcommand form (recommended):
 }
 ```
 
-Flag form (`--filesystem <DIR>`, `--fetch`, `--memory`, `--shell <DIR>`,
-`--skills <DIR>`, `--agents <DIR>`)
+When no directory is supplied, `filesystem`, `shell`, `skills`, and `agents`
+use the MCP server process's current directory. This lets a project-local MCP
+configuration follow the directory in which the client launches its servers.
+Pass explicit directories when the client does not launch MCP servers from the
+workspace or when `filesystem`/`shell` should allow multiple roots.
+
+Flag form (`--filesystem [DIR ...]`, `--fetch`, `--memory`,
+`--shell [DIR ...]`, `--skills [DIR]`, `--agents [DIR]`)
 is equivalent. See the [CLI reference](https://maxylev.github.io/modelcontextprotocol/cli.html)
 for all options, conflict rules, and environment variables.
 
