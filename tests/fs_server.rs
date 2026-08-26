@@ -318,6 +318,54 @@ async fn deprecated_read_file_alias_works() {
     .await;
 }
 
+#[tokio::test]
+async fn read_text_file_truncates_oversized_output() {
+    // Mirrors MAX_TOOL_RESULT_BYTES in src/support/mod.rs.
+    const MAX_TOOL_RESULT_BYTES: usize = 64 * 1024;
+    let dir = tmpdir();
+    let line = format!("{}\n", "x".repeat(100));
+    let big: String = line.repeat((MAX_TOOL_RESULT_BYTES + 4096) / 100);
+    std::fs::write(join(dir.path(), "big.txt"), &big).unwrap();
+    let client = connect(&[dir.path()]).await;
+    run_test(async move {
+        // A full read of an oversized file is truncated with a notice
+        // pointing at head/tail, keeping the result within a bounded size.
+        let result = call_tool(&client, "read_text_file", args("big.txt")).await;
+        assert_eq!(result.is_error, Some(false));
+        let content = text(&result);
+        assert!(content.starts_with("xxxx"), "content prefix kept");
+        assert!(
+            content.contains("[truncated: file exceeds"),
+            "truncation notice present, got: {}",
+            &content[content.len().saturating_sub(200)..]
+        );
+        assert!(content.contains("head or tail"), "hints at head/tail");
+        assert!(
+            content.len() <= MAX_TOOL_RESULT_BYTES + 256,
+            "output bounded, got {} bytes",
+            content.len()
+        );
+
+        // head/tail reads stay small and are never truncated.
+        let result = call_tool(
+            &client,
+            "read_text_file",
+            serde_json::json!({ "path": "big.txt", "head": 3 }),
+        )
+        .await;
+        assert_eq!(
+            text(&result),
+            format!(
+                "{}\n{}\n{}",
+                "x".repeat(100),
+                "x".repeat(100),
+                "x".repeat(100)
+            )
+        );
+    })
+    .await;
+}
+
 // ---------------------------------------------------------------------------
 // read_multiple_files
 // ---------------------------------------------------------------------------
@@ -339,6 +387,36 @@ async fn read_multiple_files_tolerates_partial_failure() {
         assert!(content.contains("first"), "got: {content}");
         assert!(content.contains("second"), "got: {content}");
         assert!(content.contains("missing.txt: Error"), "got: {content}");
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn read_multiple_files_truncates_combined_output() {
+    // Mirrors MAX_TOOL_RESULT_BYTES in src/support/mod.rs.
+    const MAX_TOOL_RESULT_BYTES: usize = 64 * 1024;
+    let dir = tmpdir();
+    let half = "y".repeat(MAX_TOOL_RESULT_BYTES / 2);
+    std::fs::write(join(dir.path(), "a.txt"), &half).unwrap();
+    std::fs::write(join(dir.path(), "b.txt"), &half).unwrap();
+    let client = connect(&[dir.path()]).await;
+    run_test(async move {
+        let result = call_tool(
+            &client,
+            "read_multiple_files",
+            serde_json::json!({ "paths": ["a.txt", "b.txt"] }),
+        )
+        .await;
+        let content = text(&result);
+        assert!(
+            content.contains("[truncated: combined output exceeds"),
+            "truncation notice present"
+        );
+        assert!(
+            content.len() <= MAX_TOOL_RESULT_BYTES + 256,
+            "output bounded, got {} bytes",
+            content.len()
+        );
     })
     .await;
 }
@@ -781,6 +859,93 @@ async fn directory_tree_returns_json_with_children() {
     .await;
 }
 
+#[tokio::test]
+async fn directory_tree_truncates_at_entry_budget() {
+    // Mirrors MAX_TREE_ENTRIES in src/fs/search.rs and MAX_TOOL_RESULT_BYTES
+    // in src/support/mod.rs.
+    const MAX_TREE_ENTRIES: usize = 1024;
+    const MAX_TOOL_RESULT_BYTES: usize = 64 * 1024;
+    let dir = tmpdir();
+    for i in 0..MAX_TREE_ENTRIES + 100 {
+        std::fs::write(join(dir.path(), &format!("file-{i:04}.txt")), "x").unwrap();
+    }
+    let client = connect(&[dir.path()]).await;
+    run_test(async move {
+        let result = call_tool(&client, "directory_tree", args("")).await;
+        assert_eq!(result.is_error, Some(false));
+        let content = text(&result);
+        let tree: serde_json::Value = serde_json::from_str(&content).expect("still valid JSON");
+
+        let mut entries = 0;
+        let mut truncated_markers = 0;
+        fn walk(node: &serde_json::Value, entries: &mut usize, markers: &mut usize) {
+            if let Some(list) = node.as_array() {
+                for entry in list {
+                    *entries += 1;
+                    if entry["type"] == "truncated" {
+                        *markers += 1;
+                    }
+                    if let Some(children) = entry["children"].as_array() {
+                        walk(
+                            &serde_json::Value::Array(children.clone()),
+                            entries,
+                            markers,
+                        );
+                    }
+                }
+            }
+        }
+        walk(&tree, &mut entries, &mut truncated_markers);
+        assert_eq!(truncated_markers, 1, "exactly one truncation marker");
+        assert!(
+            entries <= MAX_TREE_ENTRIES + 1,
+            "bounded: {entries} entries"
+        );
+        assert!(
+            content.len() <= MAX_TOOL_RESULT_BYTES,
+            "output within the byte cap, got {} bytes",
+            content.len()
+        );
+        assert!(
+            content.contains("tree truncated"),
+            "marker explains the truncation"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn directory_tree_truncates_oversized_json() {
+    // Long entry names push the serialized JSON past the byte cap even when
+    // the entry budget is not exhausted; the result is hard-truncated with a
+    // notice so the context window stays protected.
+    const MAX_TOOL_RESULT_BYTES: usize = 64 * 1024;
+    const MAX_TREE_ENTRIES: usize = 1024;
+    let dir = tmpdir();
+    // 180 bytes stays under the 255-byte filename limit on macOS while
+    // pushing the serialized tree (~220 KB) far past the 64 KiB byte cap.
+    let long_name = "n".repeat(180);
+    for i in 0..MAX_TREE_ENTRIES {
+        std::fs::write(join(dir.path(), &format!("{long_name}-{i:03}.txt")), "x").unwrap();
+    }
+    let client = connect(&[dir.path()]).await;
+    run_test(async move {
+        let result = call_tool(&client, "directory_tree", args("")).await;
+        assert_eq!(result.is_error, Some(false));
+        let content = text(&result);
+        assert!(
+            content.contains("[truncated: tree exceeds"),
+            "truncation notice present"
+        );
+        assert!(
+            content.len() <= MAX_TOOL_RESULT_BYTES + 256,
+            "output bounded, got {} bytes",
+            content.len()
+        );
+    })
+    .await;
+}
+
 // ---------------------------------------------------------------------------
 // edit_file
 // ---------------------------------------------------------------------------
@@ -1004,6 +1169,36 @@ async fn search_files_matches_globs_and_excludes() {
     .await;
 }
 
+#[tokio::test]
+async fn search_files_truncates_many_matches() {
+    // Mirrors MAX_TOOL_RESULT_BYTES in src/support/mod.rs.
+    const MAX_TOOL_RESULT_BYTES: usize = 64 * 1024;
+    let dir = tmpdir();
+    for i in 0..3000 {
+        std::fs::write(join(dir.path(), &format!("match-{i:04}.rs")), "").unwrap();
+    }
+    let client = connect(&[dir.path()]).await;
+    run_test(async move {
+        let result = call_tool(
+            &client,
+            "search_files",
+            serde_json::json!({ "path": "", "pattern": "*.rs" }),
+        )
+        .await;
+        let content = text(&result);
+        assert!(
+            content.contains("[truncated: too many matches"),
+            "truncation notice present"
+        );
+        assert!(
+            content.len() <= MAX_TOOL_RESULT_BYTES + 256,
+            "output bounded, got {} bytes",
+            content.len()
+        );
+    })
+    .await;
+}
+
 // ---------------------------------------------------------------------------
 // get_file_info
 // ---------------------------------------------------------------------------
@@ -1115,6 +1310,23 @@ async fn read_media_file_returns_typed_content() {
         let decoded =
             base64::Engine::decode(&base64::engine::general_purpose::STANDARD, blob).unwrap();
         assert_eq!(decoded, b"plain text");
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn read_media_file_rejects_oversized_files() {
+    // Mirrors MAX_MEDIA_FILE_BYTES in src/fs/mod.rs.
+    const MAX_MEDIA_FILE_BYTES: usize = 1024 * 1024;
+    let dir = tmpdir();
+    let huge = vec![0u8; MAX_MEDIA_FILE_BYTES + 1];
+    std::fs::write(join(dir.path(), "huge.bin"), huge).unwrap();
+    let client = connect(&[dir.path()]).await;
+    run_test(async move {
+        let result = call_tool(&client, "read_media_file", args("huge.bin")).await;
+        assert_eq!(result.is_error, Some(true));
+        let content = text(&result);
+        assert!(content.contains("media limit"), "got: {content}");
     })
     .await;
 }

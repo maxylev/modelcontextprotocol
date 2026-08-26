@@ -37,6 +37,30 @@ pub fn text_result(text: impl Into<String>) -> CallToolResult {
     CallToolResult::success(vec![ContentBlock::text(text)])
 }
 
+/// Maximum size in bytes of a single tool result's text content. Tool
+/// outputs that exceed this are truncated (see [`truncate_text`]) so a
+/// single call — e.g. `directory_tree` on a huge tree or `read_text_file`
+/// on a large file — cannot overflow the client's context window.
+pub const MAX_TOOL_RESULT_BYTES: usize = 64 * 1024;
+
+/// Truncate `text` so it fits within `max_bytes` bytes, cutting on a UTF-8
+/// character boundary. When anything is cut, `notice` is appended after the
+/// truncated content so callers can explain what was dropped and how to
+/// retrieve the rest. Returns `text` unchanged when it already fits.
+pub fn truncate_text(text: &str, max_bytes: usize, notice: &str) -> String {
+    if text.len() <= max_bytes {
+        return text.to_string();
+    }
+    let mut end = max_bytes.min(text.len());
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut truncated = String::with_capacity(end + notice.len());
+    truncated.push_str(&text[..end]);
+    truncated.push_str(notice);
+    truncated
+}
+
 /// Replace `path` contents atomically: write a unique temp file in the same
 /// directory as the target, flush it to disk, then rename it over the
 /// target. The previous target contents are never replaced before the new
@@ -125,5 +149,40 @@ mod tests {
         // reasonable umask; a too-narrow mode would mean we pinned a stale
         // permission instead of creating fresh.
         assert_eq!(mode & 0o600, 0o600, "mode {mode:#o}");
+    }
+}
+
+#[cfg(test)]
+mod truncate_tests {
+    use super::*;
+
+    #[test]
+    fn short_text_is_returned_unchanged() {
+        assert_eq!(truncate_text("hello", 10, "…"), "hello");
+        assert_eq!(truncate_text("hello", 5, "…"), "hello");
+    }
+
+    #[test]
+    fn long_text_is_cut_on_char_boundary_with_notice() {
+        let result = truncate_text("hello world", 8, "…[cut]");
+        assert_eq!(result, "hello wo…[cut]");
+    }
+
+    #[test]
+    fn multibyte_characters_are_not_split() {
+        let text = "héllo wörld"; // 'é' and 'ö' are 2-byte UTF-8
+        // A limit landing mid-'é' (bytes 1..=2) must backtrack to byte 1.
+        let result = truncate_text(text, 2, "…");
+        assert_eq!(result, "h…");
+        assert!(result.is_char_boundary(result.len()));
+        // Limits on a boundary cut cleanly.
+        let result = truncate_text(text, 5, "…");
+        assert_eq!(result, "héll…");
+    }
+
+    #[test]
+    fn empty_text_and_zero_limit() {
+        assert_eq!(truncate_text("", 64, "…"), "");
+        assert_eq!(truncate_text("abc", 0, "…"), "…");
     }
 }

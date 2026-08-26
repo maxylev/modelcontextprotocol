@@ -1,6 +1,6 @@
 [package]
 name = "modelcontextprotocol"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 rust-version = "1.97"
 description = "Filesystem, Fetch, Memory, Shell, Skills, and Agents MCP servers in a single binary, implementing the Model Context Protocol 2026-07-28 specification."

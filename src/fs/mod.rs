@@ -17,11 +17,18 @@ use rmcp::{
 };
 use serde::Deserialize;
 
-use crate::support::{AccessControl, SPEC_VERSION, atomic_write, text_result, tool_error};
+use crate::support::{
+    AccessControl, MAX_TOOL_RESULT_BYTES, SPEC_VERSION, atomic_write, text_result, tool_error,
+    truncate_text,
+};
 
 use self::edit::{EditOperation, apply_edits, render_diff};
 use self::format::{format_size, head_lines, tail_lines};
 use self::search::{TreeEntry, directory_tree, search_files};
+
+/// Maximum size of a media file (`read_media_file`) that will be base64
+/// encoded into a tool result, protecting the client's context window.
+const MAX_MEDIA_FILE_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[schemars(description = "Arguments for reading a text file")]
@@ -203,6 +210,14 @@ impl FilesystemServer {
                 )));
             }
         };
+        if bytes.len() > MAX_MEDIA_FILE_BYTES {
+            return Ok(tool_error(format!(
+                "Failed to read {}: file is {} bytes, exceeding the {} byte media limit",
+                valid_path.display(),
+                bytes.len(),
+                MAX_MEDIA_FILE_BYTES
+            )));
+        }
         let mime = mime_guess::from_path(&valid_path)
             .first_raw()
             .unwrap_or("application/octet-stream")
@@ -250,7 +265,15 @@ impl FilesystemServer {
                 Err(e) => results.push(format!("{file_path}: Error - {e}")),
             }
         }
-        Ok(text_result(results.join("\n---\n")))
+        let combined = truncate_text(
+            &results.join("\n---\n"),
+            MAX_TOOL_RESULT_BYTES,
+            &format!(
+                "\n\n[truncated: combined output exceeds {MAX_TOOL_RESULT_BYTES} bytes; \
+                 read the files individually]"
+            ),
+        );
+        Ok(text_result(combined))
     }
 
     #[tool(
@@ -326,6 +349,14 @@ impl FilesystemServer {
                 valid_path.display()
             )));
         }
+        let diff = truncate_text(
+            &diff,
+            MAX_TOOL_RESULT_BYTES,
+            &format!(
+                "\n\n[truncated: diff exceeds {MAX_TOOL_RESULT_BYTES} bytes; \
+                 consider editing a smaller portion of the file]"
+            ),
+        );
         Ok(text_result(diff))
     }
 
@@ -411,7 +442,15 @@ impl FilesystemServer {
             ));
         }
         names.sort();
-        Ok(text_result(names.join("\n")))
+        let listing = truncate_text(
+            &names.join("\n"),
+            MAX_TOOL_RESULT_BYTES,
+            &format!(
+                "\n\n[truncated: listing exceeds {MAX_TOOL_RESULT_BYTES} bytes; \
+                 use search_files or directory_tree with excludePatterns to narrow]"
+            ),
+        );
+        Ok(text_result(listing))
     }
 
     #[tool(
@@ -527,13 +566,21 @@ impl FilesystemServer {
         ));
         formatted.push(format!("Combined size: {}", format_size(total_size)));
 
-        Ok(text_result(formatted.join("\n")))
+        let listing = truncate_text(
+            &formatted.join("\n"),
+            MAX_TOOL_RESULT_BYTES,
+            &format!(
+                "\n\n[truncated: listing exceeds {MAX_TOOL_RESULT_BYTES} bytes; \
+                 use search_files or directory_tree with excludePatterns to narrow]"
+            ),
+        );
+        Ok(text_result(listing))
     }
 
     #[tool(
         name = "directory_tree",
         title = "Directory Tree",
-        description = "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
+        description = "Get a recursive tree view of files and directories as a JSON structure. Each entry includes 'name', 'type' (file/directory), and 'children' for directories. Files have no children array, while directories always have a children array (which may be empty). The output is formatted with 2-space indentation for readability. The tree is capped at a fixed number of entries to keep results small; when that budget is exhausted a 'truncated' marker entry is included, so pass excludePatterns (e.g. node_modules, target) to keep large trees within the limit. Only works within allowed directories.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn directory_tree(
@@ -551,7 +598,18 @@ impl FilesystemServer {
                 Err(e) => return Ok(tool_error(e)),
             };
         match serde_json::to_string_pretty(&tree) {
-            Ok(json) => Ok(text_result(json)),
+            Ok(json) => {
+                let json = truncate_text(
+                    &json,
+                    MAX_TOOL_RESULT_BYTES,
+                    &format!(
+                        "\n\n[truncated: tree exceeds {MAX_TOOL_RESULT_BYTES} bytes; \
+                         pass excludePatterns to exclude e.g. node_modules or target, \
+                         or use list_directory for a single directory]"
+                    ),
+                );
+                Ok(text_result(json))
+            }
             Err(e) => Ok(tool_error(format!("Failed to serialize tree: {e}"))),
         }
     }
@@ -619,6 +677,14 @@ impl FilesystemServer {
             .map(|p| p.display().to_string())
             .collect::<Vec<_>>()
             .join("\n");
+        let text = truncate_text(
+            &text,
+            MAX_TOOL_RESULT_BYTES,
+            &format!(
+                "\n\n[truncated: too many matches to list in {MAX_TOOL_RESULT_BYTES} bytes; \
+                 narrow the pattern or add excludePatterns]"
+            ),
+        );
         Ok(text_result(text))
     }
 
@@ -713,6 +779,14 @@ impl FilesystemServer {
         } else {
             content
         };
+        let text = truncate_text(
+            &text,
+            MAX_TOOL_RESULT_BYTES,
+            &format!(
+                "\n\n[truncated: file exceeds {MAX_TOOL_RESULT_BYTES} bytes; \
+                 use the head or tail parameter to read a specific portion]"
+            ),
+        );
         Ok(text_result(text))
     }
 }

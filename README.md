@@ -253,6 +253,16 @@ Quick smoke test with a generic MCP client: start
   bounded by a 30-second timeout and robots.txt policy.
 - Filesystem access is restricted to configured directories with symlink
   protection — workspace access control, not an OS sandbox.
+- **Context-window protection:** tool results are size-bounded so a single
+  call cannot overflow the client context. `directory_tree` is capped at
+  1024 entries (a `truncated` marker entry is included when the budget is
+  exhausted, and the JSON itself is truncated at 64 KiB with a notice when
+  entry names are long), text results (`read_text_file`,
+  `read_multiple_files`, `search_files`, `list_directory`,
+  `list_directory_with_sizes`, `edit_file`) are truncated at 64 KiB with a
+  notice explaining how to get the rest, and `read_media_file` refuses files
+  over 1 MiB. Use `excludePatterns` / `head` / `tail` to keep results inside
+  the limits.
 - **Skills server:** skill files are repository instructions. Activation loads
   instructions and resource paths only; it does not automatically execute
   instructions or resources.
